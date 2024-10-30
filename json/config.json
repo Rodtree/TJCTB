@@ -1,0 +1,19 @@
+{
+  "server_name": "🩸🦈Todos Juegan Con Tiburón🦈🩸",
+  "geo": { "code": "AR", "lat": -29.4135, "lon": -66.8565 },
+  "discord_message_color": "0x7289DA",
+  "current_link": "https://www.haxball.com/play?c=MDuzyVRFs78",
+  "max_players": 26,
+  "limit_goals": 5,
+  "time_limit": 10,
+  "announcement_time": 200,
+  "discord_link": "https://discord.gg/todos-juegan-con-tiburon-1132790184891645952",
+  "discord_channels": {
+    "games": "1155703507907776543",
+    "messages": "1136130738534748171",
+    "logs": "1135835614969860137",
+    "registro_staff": "1133226225045872713",
+    "sanciones": "1256460718685814804",
+    "staff": "1275927008731467808"
+  }
+}
