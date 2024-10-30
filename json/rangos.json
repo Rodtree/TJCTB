@@ -1,0 +1,58 @@
+[
+    { 
+      "rango": "Axolote",
+      "niveles": [
+        {"nivel": "III", "limite": 50},
+        {"nivel": "II", "limite": 85},
+        {"nivel": "I", "limite": 120}
+      ]
+    },
+    {
+      "rango": "Caballito de Mar",
+      "niveles": [
+        {"nivel": "III", "limite": 170},
+        {"nivel": "II", "limite": 225},
+        {"nivel": "I", "limite": 285}
+      ]
+    },
+    {
+      "rango": "Mantarraya",
+      "niveles": [
+        {"nivel": "III", "limite": 350},
+        {"nivel": "II", "limite": 420},
+        {"nivel": "I", "limite": 500}
+      ]
+    },
+    {
+      "rango": "Tiburón Ballena",
+      "niveles": [
+        {"nivel": "III", "limite": 580},
+        {"nivel": "II", "limite": 660},
+        {"nivel": "I", "limite": 740}
+      ]
+    },
+    {
+      "rango": "Megalodón",
+      "niveles": [
+        {"nivel": "III", "limite": 820},
+        {"nivel": "II", "limite": 900},
+        {"nivel": "I", "limite": 1000}
+      ]
+    },
+    {
+      "rango": "Escila",
+      "niveles": [
+        {"nivel": "III", "limite": 1125},
+        {"nivel": "II", "limite": 1250},
+        {"nivel": "I", "limite": 1400}
+      ]
+    },
+    {
+      "rango": "Kraken",
+      "niveles": [
+        {"nivel": "III", "limite": 1600},
+        {"nivel": "II", "limite": 1800},
+        {"nivel": "I", "limite": 2000}
+      ]
+    }
+  ]
