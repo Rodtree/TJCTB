@@ -109,6 +109,74 @@ const commands = [
     ]
   },
   {
+    name: "ban",
+    description: "Banea a un jugador de Haxball",
+    options: [
+        {
+            name: "nombre",
+            type: 3, // STRING
+            description: "Nombre del jugador a banear",
+            required: true
+        },
+        {
+            name: "razon",
+            type: 3, // STRING
+            description: "Razón del baneo",
+            required: false
+        }
+    ]
+  },
+{
+  name: "adv",
+  description: "Advierte a un jugador de Haxball",
+  options: [
+      {
+          name: "nombre",
+          type: 3,
+          description: "Nombre del jugador a advertir",
+          required: true
+      },
+      {
+          name: "razon",
+          type: 3,
+          description: "Razón de la advertencia",
+          required: true
+      }
+  ]
+},
+
+{
+  name: "kick",
+  description: "Expulsa a un jugador de Haxball",
+  options: [
+      {
+          name: "nombre",
+          type: 3,
+          description: "Nombre del jugador a expulsar",
+          required: true
+      },
+      {
+          name: "razon",
+          type: 3,
+          description: "Razón de la expulsión",
+          required: true
+      }
+  ]
+},
+
+  {
+    name: "unban",
+    description: "Desbanea a un jugador de Haxball",
+    options: [
+        {
+            name: "nombre",
+            type: 3,
+            description: "Nombre del jugador a desbanear",
+            required: true
+        }
+    ]
+  },
+  {
     name: "reiniciar-servidor",
     description: "Reinicia el servidor Haxball.",
   },

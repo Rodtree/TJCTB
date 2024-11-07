@@ -1,8 +1,8 @@
-const fs = require("fs");
 const path = require("path");
+const fs = require("fs");
 const { exec } = require('child_process')
 const { getTopPlayers } = require('../leaderboardHandler.js');
-const { cargarRangos } = require("../utils.js");
+const { cargarRangos, addBannedPlayer, recentlyLeftPlayers, playerAuthMap, unbanPlayer } = require("../utils.js");
 const {
   Client,
   GatewayIntentBits,
@@ -21,6 +21,24 @@ const client = new Client({
   ],
 });
 require("../registerCommands.js");
+const programadorRoleId = "1198718698245062777";
+const jefedestaffRolId = "1133233668199026799";
+const adminRolId = "1133233628894216302";
+const tibustaffRolID = "1270937228859674645";
+
+// Función para verificar si el miembro tiene uno de los roles permitidos
+function hasPermission(member) {
+  return member.roles.cache.has(programadorRoleId) ||
+    member.roles.cache.has(jefedestaffRolId) ||
+    member.roles.cache.has(adminRolId);
+}
+
+function hasStaffPermission(member) {
+  return member.roles.cache.has(programadorRoleId) ||
+    member.roles.cache.has(jefedestaffRolId) ||
+    member.roles.cache.has(tibustaffRolID) ||
+    member.roles.cache.has(adminRolId);
+}
 
 
 const CONFIG = JSON.parse(
@@ -42,49 +60,31 @@ function ejecutarComandoTerminal(comando) {
   });
 }
 
+function sendBanAnnouncementToDiscord(playerName, banAnnouncement) {
+  // Construir la ruta de manera segura
+  const configPath = path.join(__dirname, '../json/config.json'); // __dirname es el directorio actual del archivo
+  const CONFIG = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
+  const channelID = CONFIG.discord_channels.sanciones; // Ajustar al canal correcto de sanciones
+  const serverName = CONFIG.server_name;
 
+  let embed = {
+    color: 0x00CCBE, // Convertir a entero
+    description: banAnnouncement,
+  };
 
-
-async function sancionarJugador(interaction) {
-  const nombreJugador = interaction.options.getString("nombre");
-  const tipoSancion = interaction.options.getString("tipo");
-  const razon = interaction.options.getString("razon");
-
-  // Leer el archivo players.json
-  let players = [];
-  try {
-    players = JSON.parse(fs.readFileSync("./json/players.json", "utf8"));
-  } catch (error) {
-    console.error("Error al leer el archivo players.json:", error);
-  }
-
-  // Buscar al jugador por su nombre
-  const jugador = players.find((jugador) => jugador.name === nombreJugador);
-  if (jugador) {
-    // Actualizar las sanciones del jugador
-    if (tipoSancion === "adv verbal") {
-      jugador.sancion = `Adv verbal - Razón: ${razon}`;
-    } else if (tipoSancion === "kick") {
-      jugador.sancion = `Kick - Razón: ${razon}`;
-    } else if (tipoSancion === "ban") {
-      jugador.sancion = `Baneado - Razón: ${razon}`;
-    }
-
-    // Guardar los cambios en el archivo players.json
-    fs.writeFileSync("./json/players.json", JSON.stringify(players, null, 2));
-
-    await interaction.reply({
-      content: `Sanción aplicada a ${nombreJugador}: ${tipoSancion} - Razón: ${razon}`,
-      ephemeral: false
+  client.channels.cache.get(channelID).send({ embeds: [embed] })
+    .catch(error => {
+      console.error(`Error al enviar mensaje de baneo a Discord para ${playerName}:`, error);
     });
-  } else {
-    await interaction.reply({
-      content: `El jugador ${nombreJugador} no se encontró en la base de datos.`,
-      ephemeral: true
-    });
-  }
 }
+
+
+
+
+
+
+
 
 function modificarTokenEnv(nuevoToken) {
   try {
@@ -171,32 +171,6 @@ function sendGeneralCommandToDiscord(command, playerName, args) {
   }
 }
 
-
-function sendBanAnnouncementToDiscord(playerName, banAnnouncement) {
-  // Construir la ruta de manera segura
-  const configPath = path.join(__dirname, '../json/config.json'); // __dirname es el directorio actual del archivo
-  const CONFIG = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-  
-  const channelID = CONFIG.discord_channels.sanciones; // Ajustar al canal correcto de sanciones
-  const serverName = CONFIG.server_name;
-
-  let embed = {
-    color: 0x00CCBE, // Convertir a entero
-    description: banAnnouncement,
-  };
-
-  client.channels.cache.get(channelID).send({ embeds: [embed] })
-    .catch(error => {
-      console.error(`Error al enviar mensaje de baneo a Discord para ${playerName}:`, error);
-    });
-}
-
-
-
-
-
-const SERVIDOR_ID = "1132790184891645952";
-
 client.on('interactionCreate', async (interaction) => {
   try {
     // Tu código actual que podría generar un error
@@ -211,20 +185,8 @@ client.on('interactionCreate', async (interaction) => {
   const { commandName, options, user } = interaction;
 
   if (commandName === "reiniciar-servidor") {
-    // Verificar roles permitidos
-    const programadorRoleId = "1198718698245062777";
-    const jefedestaffRolId = "1133233668199026799";
-    const adminRolId = "1133233628894216302";
-
-    if (
-      !interaction.member.roles.cache.has(programadorRoleId) &&
-      !interaction.member.roles.cache.has(jefedestaffRolId) &&
-      !interaction.member.roles.cache.has(adminRolId)
-    ) {
-      return interaction.reply({
-        content: "¡No tienes permisos para ejecutar este comando!",
-        ephemeral: true // Solo visible para el usuario que ejecutó el comando
-      });
+    if (!hasPermission(interaction.member)) {
+      return interaction.reply({ content: "¡No tienes permisos para ejecutar este comando!", ephemeral: true });
     }
 
     // Ejecutar el comando para reiniciar el servidor
@@ -237,52 +199,13 @@ client.on('interactionCreate', async (interaction) => {
     });
   }
 
-  if (commandName === 'sancionar') {
-    // Verificar roles permitidos para sancionar
-    const programadorRoleId = "1198718698245062777";
-    const jefedestaffRolId = "1133233668199026799";
-    const adminRolId = "1133233628894216302";
-    const modRolid = "1133233615627620372";
-    const ayudanteRolid = "1133233397045670022";
-
-    if (
-      !interaction.member.roles.cache.has(programadorRoleId) &&
-      !interaction.member.roles.cache.has(jefedestaffRolId) &&
-      !interaction.member.roles.cache.has(adminRolId) &&
-      !interaction.member.roles.cache.has(modRolid) &&
-      !interaction.member.roles.cache.has(ayudanteRolid)
-    ) {
-      return interaction.reply({
-        content: "¡No tienes permisos para ejecutar este comando!",
-        ephemeral: true // Solo visible para el usuario que ejecutó el comando
-      });
-    }
-
-    // Ejecutar la función para sancionar al jugador
-    await sancionarJugador(interaction);
-
-  }
 
 
   if (commandName === "cambiar-token") {
     // Obtener el nuevo token de Haxball proporcionado como argumento
     const nuevoToken = options.getString("nuevo_token");
-
-    // Verificar roles permitidos
-    const programadorRoleId = "1198718698245062777";
-    const jefedestaffRolId = "1133233668199026799";
-    const adminRolId = "1133233628894216302";
-
-    if (
-      !interaction.member.roles.cache.has(programadorRoleId) &&
-      !interaction.member.roles.cache.has(jefedestaffRolId) &&
-      !interaction.member.roles.cache.has(adminRolId)
-    ) {
-      return interaction.reply({
-        content:
-          "Â¡No tienes permisos para ejecutar este comando!",
-        ephemeral: true // Solo visible para el usuario que ejecutÃ³ el comando
-      });
+    if (!hasPermission(interaction.member)) {
+      return interaction.reply({ content: "¡No tienes permisos para ejecutar este comando!", ephemeral: true });
     }
 
     // Modificar el token de Haxball en el archivo .env
@@ -305,43 +228,29 @@ client.on('interactionCreate', async (interaction) => {
   }
 
 
- 
-
 
 
 
   if (commandName === "borrarstats") {
-    // Obtener el ID del primer rol permitido
-    const programadorRoleId = "1198718698245062777";
-    // Obtener el ID del segundo rol permitido
-    const jefedestaffRolId = "1133233668199026799";
-    // Obtener el ID del tercer rol permitido
-    const adminRolId = "1133233628894216302";
-
-    // Verificar si el usuario que ejecuta el comando tiene alguno de los roles permitidos
-    if (!interaction.member.roles.cache.has(programadorRoleId) &&
-      !interaction.member.roles.cache.has(jefedestaffRolId) &&
-      !interaction.member.roles.cache.has(adminRolId)) {
-      // Si el usuario no tiene ninguno de los roles permitidos y tampoco es administrador, responder con un mensaje indicando que no tiene permiso
+    if (!hasPermission(interaction.member)) {
       return interaction.reply({ content: "¡No tienes permisos para ejecutar este comando!", ephemeral: true });
     }
 
     // Lógica para borrar estadísticas aquí
     borrarEstadisticas(interaction);
   }
-
-  
-
-
 });
 
 async function borrarEstadisticas(interaction) {
   try {
+    // Crear la ruta absoluta para el archivo players.json
+    const filePath = path.join(__dirname, "../json/players.json");
+
     // Leer el archivo players.json
-    const data = fs.readFileSync("../json/players.json", "utf8");
+    const data = fs.readFileSync(filePath, "utf8");
     const players = JSON.parse(data);
 
-    // Establecer discordUser y auth a cadenas vacías
+    // Establecer todas las estadísticas de los jugadores a 0
     players.forEach((player) => {
       player.goals = 0;
       player.counterGoals = 0;
@@ -355,10 +264,10 @@ async function borrarEstadisticas(interaction) {
     });
 
     // Guardar los cambios en el archivo players.json
-    fs.writeFileSync("../json/players.json", JSON.stringify(players, null, 2));
+    fs.writeFileSync(filePath, JSON.stringify(players, null, 2));
 
     // Leer el archivo nuevamente para verificar si se guardaron los cambios
-    const updatedData = fs.readFileSync("../json/players.json", "utf8");
+    const updatedData = fs.readFileSync(filePath, "utf8");
     const updatedPlayers = JSON.parse(updatedData);
     console.log("Datos actualizados:", updatedPlayers);
 
@@ -397,7 +306,7 @@ function LoadDiscordHandler(room) {
   room.verifyDiscord = async (name, player) => {
     try {
       const guild = client.guilds.cache.get("1132790184891645952");
-  
+
       if (!guild) {
         room.sendAnnouncement(
           "Servidor de Discord no encontrado.",
@@ -406,7 +315,7 @@ function LoadDiscordHandler(room) {
         );
         return;
       }
-  
+
       // Función que implementa un timeout manual para la búsqueda de miembros
       async function fetchMemberWithTimeout(guild, name, limit = 1, timeout = 60000) {
         return Promise.race([
@@ -414,7 +323,7 @@ function LoadDiscordHandler(room) {
           new Promise((_, reject) => setTimeout(() => reject(new Error('GuildMembersTimeout')), timeout))
         ]);
       }
-  
+
       // Usamos la función con timeout para buscar el miembro
       const member = await fetchMemberWithTimeout(guild, name, 1)
         .catch(error => {
@@ -429,7 +338,7 @@ function LoadDiscordHandler(room) {
           }
           return null;
         });
-  
+
       if (!member) {
         room.sendAnnouncement(
           "Nombre no válido en Discord, usa !verify nombrediscord",
@@ -438,7 +347,7 @@ function LoadDiscordHandler(room) {
         );
         return;
       }
-  
+
       if (room.getPlayerStatsByDiscord(name)) {
         room.sendAnnouncement(
           "Este usuario ya está sincronizado con Discord.",
@@ -447,7 +356,7 @@ function LoadDiscordHandler(room) {
         );
         return;
       }
-  
+
       const embed = {
         color: 0x0E3937,
         title: "Verifica tu cuenta en 🩸🦈Todos Juegan Con Tiburón🦈🩸!",
@@ -456,12 +365,12 @@ function LoadDiscordHandler(room) {
           text: "¡Únete y juega con nosotros!"
         }
       };
-  
+
       const join = new ButtonBuilder()
         .setLabel("Verify")
         .setStyle(ButtonStyle.Primary)
         .setCustomId(`verify:${player.name}:${name}`);
-  
+
       // Intentamos enviar el mensaje directo al miembro
       try {
         await member.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(join)] });
@@ -487,7 +396,7 @@ function LoadDiscordHandler(room) {
           );
         }
       }
-  
+
     } catch (error) {
       console.error("Error general en la verificación de Discord:", error);
       room.sendAnnouncement(
@@ -497,122 +406,122 @@ function LoadDiscordHandler(room) {
       );
     }
   };
-  
+
 
 
 
   client.on("interactionCreate", async (interaction) => {
-    const { commandName, customId,options, user } = interaction;
-    
+    const { commandName, customId, options, user } = interaction;
+
 
     if (interaction.isButton()) {
       if (customId.startsWith("unlink:")) {
-          const [, playerName] = customId.split(":");
-  
-          const foundPlayer = room.playersdb.find(player => player && player.name === playerName);
-  
-          if (foundPlayer && foundPlayer.discordUser === user.username) {
-              foundPlayer.discordUser = "";
-              foundPlayer.auth = "";
-  
-              fs.writeFileSync("./json/players.json", JSON.stringify(room.playersdb, null, 2));
-  
-              await interaction.reply({
-                  content: `✅ **Desvinculación exitosa**\n\nTu cuenta de Discord ha sido **desvinculada** correctamente del jugador **${playerName}**.\n\n🔒 *Si deseas volver a vincular tu cuenta, puedes hacerlo en cualquier momento.*`,
-                  ephemeral: true
-              });
-          } else {
-              await interaction.reply({
-                  content: `⚠️ **Error**\n\nNo estás vinculado a la cuenta de jugador **${playerName}**. Por favor, revisa tu información o contacta a un administrador si el problema persiste.`,
-                  ephemeral: true
-              });
-          }
+        const [, playerName] = customId.split(":");
+
+        const foundPlayer = room.playersdb.find(player => player && player.name === playerName);
+
+        if (foundPlayer && foundPlayer.discordUser === user.username) {
+          foundPlayer.discordUser = "";
+          foundPlayer.auth = "";
+
+          fs.writeFileSync("./json/players.json", JSON.stringify(room.playersdb, null, 2));
+
+          await interaction.reply({
+            content: `✅ **Desvinculación exitosa**\n\nTu cuenta de Discord ha sido **desvinculada** correctamente del jugador **${playerName}**.\n\n🔒 *Si deseas volver a vincular tu cuenta, puedes hacerlo en cualquier momento.*`,
+            ephemeral: true
+          });
+        } else {
+          await interaction.reply({
+            content: `⚠️ **Error**\n\nNo estás vinculado a la cuenta de jugador **${playerName}**. Por favor, revisa tu información o contacta a un administrador si el problema persiste.`,
+            ephemeral: true
+          });
+        }
       }
-  }
-  
-  
-  
+    }
+
+
+
 
     if (interaction.isButton()) {
-        if (customId.startsWith("verify:")) {
-            const [, playerName, playerDiscord] = customId.split(":");
+      if (customId.startsWith("verify:")) {
+        const [, playerName, playerDiscord] = customId.split(":");
 
-            let player = room.getPlayerObjectByName(playerName);
+        let player = room.getPlayerObjectByName(playerName);
 
-            if (player) {
-                const embed = {
-                    color: 0x0E3937,
-                    title: "Verificación completada en 🩸🦈Todos Juegan Con Tiburón🦈🩸",
-                    description: `¡Felicidades, **${playerDiscord}**! Tu cuenta **${playerName}** ha sido verificada.`,
-                    footer: {
-                        text: "¡Prepárate para jugar!"
-                    }
-                };
-
-                await user.send({ embeds: [embed], components: [] })
-                    .catch(error => {
-                        console.error("Error al enviar mensaje de verificación:", error);
-                        interaction.reply({
-                            content: "Hubo un error al enviarte el mensaje de verificación.",
-                            ephemeral: true
-                        });
-                    });
-
-                interaction.message.delete()
-                    .catch(error => {
-                        console.error("Error al eliminar mensaje de verificación:", error);
-                        interaction.reply({
-                            content: "Hubo un error al eliminar el mensaje de verificación.",
-                            ephemeral: true
-                        });
-                    });
-
-                room.setUserDiscord(playerDiscord, playerName);
-
-                // Después de eliminar el mensaje, enviar el botón de desvinculación
-                setTimeout(() => {
-                    const unlink = new ButtonBuilder()
-                        .setLabel("Unlink")
-                        .setStyle(ButtonStyle.Danger)
-                        .setCustomId(`unlink:${playerName}`);
-
-                    const row = new ActionRowBuilder().addComponents(unlink);
-
-                    const unlinkEmbed = {
-                        color: 0xff0000,
-                        title: "Desvinculación en 🩸🦈Todos Juegan Con Tiburón🦈🩸",
-                        description: `Si deseas desvincularte, presiona el botón que dice "Unlink".`,
-                        footer: {
-                            text: "¡El funcionamiento del boton es temporal!"
-                        }
-                    };
-
-                    user.send({ embeds: [unlinkEmbed], components: [row] })
-                        .catch(error => {
-                            console.error("Error al enviar mensaje de desvinculación:", error);
-                            interaction.followUp({
-                                content: "Hubo un error al enviarte el mensaje de desvinculación.",
-                                ephemeral: true
-                            });
-                        });
-                }, 1000); // Espera 1 segundo antes de enviar el botón de desvinculación (ajusta según necesites)
-            } else {
-                interaction.reply({
-                    content: "No se pudo encontrar el jugador asociado con esta solicitud de verificación.",
-                    ephemeral: true
-                });
+        if (player) {
+          const embed = {
+            color: 0x0E3937,
+            title: "Verificación completada en 🩸🦈Todos Juegan Con Tiburón🦈🩸",
+            description: `¡Felicidades, **${playerDiscord}**! Tu cuenta **${playerName}** ha sido verificada.`,
+            footer: {
+              text: "¡Prepárate para jugar!"
             }
+          };
+
+          await user.send({ embeds: [embed], components: [] })
+            .catch(error => {
+              console.error("Error al enviar mensaje de verificación:", error);
+              interaction.reply({
+                content: "Hubo un error al enviarte el mensaje de verificación.",
+                ephemeral: true
+              });
+            });
+
+          interaction.message.delete()
+            .catch(error => {
+              console.error("Error al eliminar mensaje de verificación:", error);
+              interaction.reply({
+                content: "Hubo un error al eliminar el mensaje de verificación.",
+                ephemeral: true
+              });
+            });
+
+          room.setUserDiscord(playerDiscord, playerName);
+
+          // Después de eliminar el mensaje, enviar el botón de desvinculación
+          setTimeout(() => {
+            const unlink = new ButtonBuilder()
+              .setLabel("Unlink")
+              .setStyle(ButtonStyle.Danger)
+              .setCustomId(`unlink:${playerName}`);
+
+            const row = new ActionRowBuilder().addComponents(unlink);
+
+            const unlinkEmbed = {
+              color: 0xff0000,
+              title: "Desvinculación en 🩸🦈Todos Juegan Con Tiburón🦈🩸",
+              description: `Si deseas desvincularte, presiona el botón que dice "Unlink".`,
+              footer: {
+                text: "¡El funcionamiento del boton es temporal!"
+              }
+            };
+
+            user.send({ embeds: [unlinkEmbed], components: [row] })
+              .catch(error => {
+                console.error("Error al enviar mensaje de desvinculación:", error);
+                interaction.followUp({
+                  content: "Hubo un error al enviarte el mensaje de desvinculación.",
+                  ephemeral: true
+                });
+              });
+          }, 1000); // Espera 1 segundo antes de enviar el botón de desvinculación (ajusta según necesites)
+        } else {
+          interaction.reply({
+            content: "No se pudo encontrar el jugador asociado con esta solicitud de verificación.",
+            ephemeral: true
+          });
         }
+      }
     }
 
     if (commandName === "top") {
       const tipo = options.getString("tipo");
-    
+
       // Definición de variables
       let tipoEstadistica, tituloTipo, icono, color;
       const serverIconUrl = 'https://drive.google.com/uc?export=view&id=1Ajss2YRDxkQ-NbC940eKDbnbu_LRhXN8'; // URL del ícono del servidor
 
-    
+
       // Mapeo de tipos de estadísticas a sus atributos
       const estadisticas = {
         goleadores: {
@@ -646,14 +555,14 @@ function LoadDiscordHandler(room) {
           color: 0x8A2BE2,
         },
       };
-    
+
       // Validar tipo y obtener propiedades correspondientes
       if (estadisticas[tipo]) {
         ({ tipo: tipoEstadistica, titulo: tituloTipo, icono, color } = estadisticas[tipo]);
       } else {
         return interaction.reply("Tipo de estadística no válida. Debe ser 'goleadores', 'asistidores', 'vallas', 'golesContra', o 'tiempoJugado'.");
       }
-    
+
       // Obtener los 10 mejores jugadores según la estadística especificada
       getTopPlayers(room, tipoEstadistica)
         .then(topPlayers => {
@@ -663,7 +572,7 @@ function LoadDiscordHandler(room) {
               name: `${tituloTipo}`,
               icon_url: serverIconUrl, // Icono del servidor
             },
-            description: topPlayers.map(player => 
+            description: topPlayers.map(player =>
               `**${icono} ${player.position}. ${player.playerName}** - ${player.statistic}`
             ).join('\n'),
             footer: {
@@ -672,7 +581,7 @@ function LoadDiscordHandler(room) {
             },
             timestamp: new Date(),
           };
-    
+
           interaction.reply({ embeds: [embed] });
         })
         .catch(error => {
@@ -680,310 +589,436 @@ function LoadDiscordHandler(room) {
           interaction.reply('Ocurrió un error al obtener los mejores jugadores. Por favor, intenta nuevamente más tarde.');
         });
     }
-    
-    
-    
-  
+
+
+
+
 
 
     if (commandName === "desvincular") {
 
       // Obtener el nombre de usuario de Discord
       const discordUsername = interaction.user.username;
-  
+
       // Buscar en room.playersdb al jugador con discordUser igual al nombre de usuario de Discord
       const foundPlayer = room.playersdb.find(player => player && player.discordUser === discordUsername);
-  
+
       if (foundPlayer) {
-          const playerName = foundPlayer.name;
-  
-          // Crear el botón de desvinculación
-          const unlinkButton = new ButtonBuilder()
-              .setLabel("❌ Desvincular")
-              .setStyle(ButtonStyle.Danger)
-              .setCustomId(`unlink:${playerName}`);
-  
-          const row = new ActionRowBuilder().addComponents(unlinkButton);
-  
-          const unlinkEmbed = {
-              color: 0xff0000,
-              title: "🦈 **Solicitud de Desvinculación en 'Todos Juegan Con Tiburón'** 🦈",
-              description: `Estás vinculado a la cuenta del jugador **${playerName}**.\n\n` +
-                           `🔓 **Grupo**: ${foundPlayer.group}\n` +
-                           `🌟 **Estadísticas Actuales**:\n` +
-                           `- 🏆 **Victorias**: ${foundPlayer.victories}\n` +
-                           `- 😔 **Derrotas**: ${foundPlayer.defeated}\n` +
-                           `- ⚽ **Goles**: ${foundPlayer.goals}\n\n` +
-                           `Si deseas **desvincularte** de esta cuenta, presiona el botón de **Desvincular** aquí abajo.`,
-              footer: {
-                  text: "⚠️ ¡El botón de desvinculación es temporal! Contacta con un administrador si tienes problemas."
-              }
-          };
-  
-          // Enviar mensaje directo con el botón al usuario de Discord
-          await interaction.user.send({ embeds: [unlinkEmbed], components: [row] });
-  
-          await interaction.reply({
-              content: `📩 **Solicitud enviada**\n\nSe ha enviado un mensaje de solicitud de **desvinculación** a tu cuenta de Discord.`,
-              ephemeral: true
-          });
+        const playerName = foundPlayer.name;
+
+        // Crear el botón de desvinculación
+        const unlinkButton = new ButtonBuilder()
+          .setLabel("❌ Desvincular")
+          .setStyle(ButtonStyle.Danger)
+          .setCustomId(`unlink:${playerName}`);
+
+        const row = new ActionRowBuilder().addComponents(unlinkButton);
+
+        const unlinkEmbed = {
+          color: 0xff0000,
+          title: "🦈 **Solicitud de Desvinculación en 'Todos Juegan Con Tiburón'** 🦈",
+          description: `Estás vinculado a la cuenta del jugador **${playerName}**.\n\n` +
+            `🔓 **Grupo**: ${foundPlayer.group}\n` +
+            `🌟 **Estadísticas Actuales**:\n` +
+            `- 🏆 **Victorias**: ${foundPlayer.victories}\n` +
+            `- 😔 **Derrotas**: ${foundPlayer.defeated}\n` +
+            `- ⚽ **Goles**: ${foundPlayer.goals}\n\n` +
+            `Si deseas **desvincularte** de esta cuenta, presiona el botón de **Desvincular** aquí abajo.`,
+          footer: {
+            text: "⚠️ ¡El botón de desvinculación es temporal! Contacta con un administrador si tienes problemas."
+          }
+        };
+
+        // Enviar mensaje directo con el botón al usuario de Discord
+        await interaction.user.send({ embeds: [unlinkEmbed], components: [row] });
+
+        await interaction.reply({
+          content: `📩 **Solicitud enviada**\n\nSe ha enviado un mensaje de solicitud de **desvinculación** a tu cuenta de Discord.`,
+          ephemeral: true
+        });
       } else {
-          await interaction.reply({
-              content: `⚠️ **No estás vinculado**\n\nNo se encontró ninguna cuenta de jugador vinculada a tu Discord.`,
-              ephemeral: true
-          });
+        await interaction.reply({
+          content: `⚠️ **No estás vinculado**\n\nNo se encontró ninguna cuenta de jugador vinculada a tu Discord.`,
+          ephemeral: true
+        });
       }
-  }
-   
+    }
+
+
+
+
+
+    if (commandName === "ban") {
+      if (!hasStaffPermission(interaction.member)) {
+        return interaction.reply({ content: "¡No tienes permisos para ejecutar este comando!", ephemeral: true });
+      }
+      const targetName = options.getString("nombre");
+      const banReason = options.getString("razon") || "No especificada";
+
+      // Buscar el jugador en la sala de Haxball
+      const targetPlayer = room.getPlayerList().find(p => p.name === targetName);
+      let authId;
+
+      // Primero, intenta obtener el authId del jugador en la sala
+      if (targetPlayer) {
+        authId = playerAuthMap.get(targetPlayer.id);
+      }
+
+      // Si no está en la sala, verifica en recentlyLeftPlayers
+      if (!authId) {
+        const recentlyLeftEntry = Array.from(recentlyLeftPlayers.entries()).find(([id, data]) => data.name === targetName);
+        if (recentlyLeftEntry) {
+          authId = recentlyLeftEntry[1].auth;
+        }
+      }
+
+      if (authId) {
+        console.log(`Intentando expulsar a ${targetName} con Auth ID: ${authId}`);
+        addBannedPlayer({ name: targetName, auth: authId }, banReason);
+        room.kickPlayer(targetPlayer?.id, "Has sido expulsado de esta sala.");
+
+        const currentDate = new Date().toLocaleString();
+        const banAnnouncementInGame = `🦈🚫 ${targetName} ha sido baneado del servidor por ${user.username}. Razón: ${banReason}. Fecha de sanción: ${currentDate} 🚫🦈`;
+        room.sendAnnouncement(banAnnouncementInGame, null, 0xFFD700);
+
+        const playerStats = room.getPlayerStats(targetName);
+        if (playerStats) {
+          playerStats.sancion = `Baneado por DS:${user.username} - Razón: ${banReason} - Fecha: ${currentDate}`;
+        }
+
+        const banAnnouncementForDiscord = `🦈🚫 **${targetName}** ha sido baneado del servidor por **${user.username}**. Razón: **${banReason}**. Fecha de sanción: **${currentDate}** 🚫🦈`;
+        sendBanAnnouncementToDiscord(targetName, banAnnouncementForDiscord);
+
+        await interaction.reply({
+          content: `✅ **${targetName}** ha sido baneado exitosamente.`,
+          ephemeral: false
+        });
+      } else {
+        await interaction.reply({
+          content: `⚠️ No se encontró Auth ID para **${targetName}**. No se pudo proceder con el baneo.`,
+          ephemeral: false
+        });
+      }
+    }
+
+    if (commandName === "adv") {
+      if (!hasStaffPermission(interaction.member)) {
+        return interaction.reply({ content: "¡No tienes permisos para ejecutar este comando!", ephemeral: true });
+      }
+      const targetName = options.getString("nombre");
+      const advReason = options.getString("razon");
+
+      const playerId = room.getPlayerByName(targetName);
+
+      if (playerId < 0) {
+        await interaction.reply({
+          content: "⚠️ Ese jugador no existe.",
+          ephemeral: true
+        });
+      } else {
+        const player = room.getPlayer(playerId);
+        room.sendAnnouncement(
+          `⚠️ ${player.name} ha sido advertido verbalmente por DS:${interaction.user.username}\nRazón: ${advReason} ⚠️`,
+          null,
+          0xFF0000,
+          "bold"
+        );
+        room.playerAddAdvVerbal(player.name, advReason, interaction.user.username);
+
+        await interaction.reply({
+          content: `✅ **${targetName}** ha sido advertido correctamente.`,
+          ephemeral: false
+        });
+      }
+    }
+    if (commandName === "kick") {
+      if (!hasStaffPermission(interaction.member)) {
+        return interaction.reply({ content: "¡No tienes permisos para ejecutar este comando!", ephemeral: true });
+      }
+      const targetName = options.getString("nombre");
+      const kickReason = options.getString("razon");
+
+      const playerId = room.getPlayerByName(targetName);
+
+      if (playerId < 0) {
+        await interaction.reply({
+          content: "⚠️ Ese jugador no existe.",
+          ephemeral: true
+        });
+      } else {
+        const player = room.getPlayer(playerId);
+        room.sendAnnouncement(
+          `${player.name} ha sido expulsado por DS:${interaction.user.username}. Razón: ${kickReason}`,
+          null,
+          0xFF0000
+        );
+        const kickMessage = `Has sido expulsado por DS:${interaction.user.username}. Razón: ${kickReason}`;
+        room.kickPlayer(playerId, kickMessage);
+        room.playerAddKick(player.name, kickReason, interaction.user.username);
+
+        await interaction.reply({
+          content: `✅ **${targetName}** ha sido expulsado correctamente.`,
+          ephemeral: false
+        });
+      }
+    }
+
+
+    if (commandName === "unban") {
+      if (!hasStaffPermission(interaction.member)) {
+        return interaction.reply({ content: "¡No tienes permisos para ejecutar este comando!", ephemeral: true });
+      }
+      const targetName = options.getString("nombre");
+
+      // Llamar a la función para desbanear al jugador
+      unbanPlayer(targetName); // Asegúrate de que esta función esté disponible
+
+      // Limpiar las sanciones del jugador en la sala de Haxball
+      const playerStats = room.getPlayerStats(targetName);
+      if (playerStats) {
+        playerStats.sancion = ""; // Limpia la sanción del jugador
+      }
+
+      // Anunciar el desbaneo en el servidor de Haxball
+      const unbanAnnouncement = `Jugador ${targetName} ha sido desbaneado y sus sanciones han sido eliminadas.`;
+      room.sendAnnouncement(unbanAnnouncement, null, 0x00FF00); // Enviar anuncio a la sala
+
+      await interaction.reply({
+        content: `✅ **${targetName}** ha sido desbaneado exitosamente y sus sanciones han sido eliminadas.`,
+        ephemeral: false // Asegúrate de que este mensaje sea visible para todos
+      });
+    }
+
+
+
 
 
     if (commandName === "link") {
       const CONFIG = require(path.join(__dirname, "..", "json", "config.json"));
       let serverStatus;
-    
+
       try {
-          // Asegúrate de que la ruta al archivo sea correcta
-          serverStatus = JSON.parse(fs.readFileSync('./json/serverStatus.json', 'utf-8')); // Cambia la ruta según tu estructura de carpetas
+        // Asegúrate de que la ruta al archivo sea correcta
+        serverStatus = JSON.parse(fs.readFileSync('./json/serverStatus.json', 'utf-8')); // Cambia la ruta según tu estructura de carpetas
       } catch (error) {
-          console.error("Error leyendo el estado del servidor:", error);
-          serverStatus = { online: false }; // Valor por defecto si hay un error
+        console.error("Error leyendo el estado del servidor:", error);
+        serverStatus = { online: false }; // Valor por defecto si hay un error
       }
-  
+
       // Verificamos si el servidor está en línea
       let embed;
       if (serverStatus.online) {
-          const playersOnline = room.getPlayerList().length; // Devuelve la cantidad de jugadores conectados en tiempo real
-          const maxPlayers = CONFIG.max_players; // Obtiene el valor del máximo de jugadores desde la configuración
-          
-          embed = {
-              color: 0x00FF00, // Verde si el servidor está en línea
-              title: "🟢 Estado Actual del Servidor 🟢",
-              description: `🦈 **Todos Juegan Con Tiburón** 🦈\n\n` +
-                  `📊 **Información del Servidor**\n` +
-                  `**Región**: :flag_ar: Argentina\n` +
-                  `**Jugadores Conectados**: 👥 ${playersOnline}/${maxPlayers}\n` +
-                  `**Estado**: 🟢 En Línea\n\n` +
-                  `¡Únete al servidor y juega ahora! 🩸🦈`,
-          };
-  
-          // Crear el botón para unirse al servidor si está en línea
-          const join = new ButtonBuilder()
-              .setLabel("👥 Unirse")
-              .setURL(room.config.current_link)
-              .setStyle(ButtonStyle.Link);
-  
-          const row = new ActionRowBuilder().addComponents(join);
-  
-          interaction.reply({ embeds: [embed], components: [row] });
-  
+        const playersOnline = room.getPlayerList().length; // Devuelve la cantidad de jugadores conectados en tiempo real
+        const maxPlayers = CONFIG.max_players; // Obtiene el valor del máximo de jugadores desde la configuración
+
+        embed = {
+          color: 0x00FF00, // Verde si el servidor está en línea
+          title: "🟢 Estado Actual del Servidor 🟢",
+          description: `🦈 **Todos Juegan Con Tiburón** 🦈\n\n` +
+            `📊 **Información del Servidor**\n` +
+            `**Región**: :flag_ar: Argentina\n` +
+            `**Jugadores Conectados**: 👥 ${playersOnline}/${maxPlayers}\n` +
+            `**Estado**: 🟢 En Línea\n\n` +
+            `¡Únete al servidor y juega ahora! 🩸🦈`,
+        };
+
+        // Crear el botón para unirse al servidor si está en línea
+        const join = new ButtonBuilder()
+          .setLabel("👥 Unirse")
+          .setURL(room.config.current_link)
+          .setStyle(ButtonStyle.Link);
+
+        const row = new ActionRowBuilder().addComponents(join);
+
+        interaction.reply({ embeds: [embed], components: [row] });
+
       } else {
-          // Si el servidor está offline
-          embed = {
-              color: 0xFF0000, // Rojo si el servidor está offline
-              title: "🔴 Estado Actual del Servidor 🔴",
-              description: `🦈 **Todos Juegan Con Tiburón** 🦈\n\n` +
-                  `📊 **Información del Servidor**\n` +
-                  `**Región**: :flag_ar: Argentina\n` +
-                  `**Jugadores Conectados**: ❌ No disponible\n` +
-                  `**Estado**: 🔴 Fuera de Línea\n\n` +
-                  `⚠️ **El servidor está actualmente apagado.**\n` +
-                  `🔔 **Mantente atento al ping server.**`,
-          };
-  
-          interaction.reply({ embeds: [embed] }); // Sin botón, ya que el servidor está offline
+        // Si el servidor está offline
+        embed = {
+          color: 0xFF0000, // Rojo si el servidor está offline
+          title: "🔴 Estado Actual del Servidor 🔴",
+          description: `🦈 **Todos Juegan Con Tiburón** 🦈\n\n` +
+            `📊 **Información del Servidor**\n` +
+            `**Región**: :flag_ar: Argentina\n` +
+            `**Jugadores Conectados**: ❌ No disponible\n` +
+            `**Estado**: 🔴 Fuera de Línea\n\n` +
+            `⚠️ **El servidor está actualmente apagado.**\n` +
+            `🔔 **Mantente atento al ping server.**`,
+        };
+
+        interaction.reply({ embeds: [embed] }); // Sin botón, ya que el servidor está offline
       }
-  }
-  
-  
+    }
 
-  function formatTime(seconds) {
-    const days = Math.floor(seconds / 86400); // Calcula los días
-    const hours = Math.floor((seconds % 86400) / 3600); // Calcula las horas restantes
-    const minutes = Math.floor((seconds % 3600) / 60); // Calcula los minutos restantes
-    const secs = seconds % 60; // Calcula los segundos restantes
 
-    let formattedTime = "";
-    if (days > 0) {
+
+    function formatTime(seconds) {
+      const days = Math.floor(seconds / 86400); // Calcula los días
+      const hours = Math.floor((seconds % 86400) / 3600); // Calcula las horas restantes
+      const minutes = Math.floor((seconds % 3600) / 60); // Calcula los minutos restantes
+      const secs = seconds % 60; // Calcula los segundos restantes
+
+      let formattedTime = "";
+      if (days > 0) {
         formattedTime += `${days} día${days > 1 ? 's' : ''}, `;
-    }
-    if (hours > 0) {
-        formattedTime += `${hours} hora${hours > 1 ? 's' : ''}, `;
-    }
-    if (minutes > 0 || hours > 0 || days > 0) {
-        formattedTime += `${minutes} minuto${minutes !== 1 ? 's' : ''}, `;
-    }
-    formattedTime += `${secs} segundo${secs !== 1 ? 's' : ''}`;
-
-    return formattedTime;
-}
-
-function obtenerRango(xp) {
-  let rangoCompleto = "";
-  const listaRangos = cargarRangos();
-
-  for (let i = 0; i < listaRangos.length; i++) {
-      for (let j = 0; j < listaRangos[i].niveles.length; j++) {
-          if (xp < listaRangos[i].niveles[j].limite) {
-              rangoCompleto = `${listaRangos[i].rango} ${listaRangos[i].niveles[j].nivel}`;
-              return rangoCompleto;
-          }
       }
-  }
+      if (hours > 0) {
+        formattedTime += `${hours} hora${hours > 1 ? 's' : ''}, `;
+      }
+      if (minutes > 0 || hours > 0 || days > 0) {
+        formattedTime += `${minutes} minuto${minutes !== 1 ? 's' : ''}, `;
+      }
+      formattedTime += `${secs} segundo${secs !== 1 ? 's' : ''}`;
 
-  return "Leviatán"; // Si no se encuentra ningún rango adecuado
-}
-function actualizarGrupoJugador(playerStats, nuevoRango) {
-  const gruposExcluidos = ["Vip", "Tiburon de oro", "Ayudante", "Mod", "Programador", "Admin", "Jefe de Staff", "Fundador", "Asistente"];
+      return formattedTime;
+    }
 
-  if (!gruposExcluidos.includes(playerStats.group)) {
-      playerStats.group = nuevoRango;
-  }
-}
-function generarLineaDivisoria(emoji, cantidad) {
-  return new Array(cantidad).fill(emoji).join('');
-}
+    function obtenerRango(xp) {
+      let rangoCompleto = "";
+      const listaRangos = cargarRangos();
+
+      for (let i = 0; i < listaRangos.length; i++) {
+        for (let j = 0; j < listaRangos[i].niveles.length; j++) {
+          if (xp < listaRangos[i].niveles[j].limite) {
+            rangoCompleto = `${listaRangos[i].rango} ${listaRangos[i].niveles[j].nivel}`;
+            return rangoCompleto;
+          }
+        }
+      }
+
+      return "Leviatán"; // Si no se encuentra ningún rango adecuado
+    }
+    function actualizarGrupoJugador(playerStats, nuevoRango) {
+      const gruposExcluidos = ["Vip", "Tiburon de oro", "Ayudante", "Mod", "Programador", "Admin", "Jefe de Staff", "Fundador", "Asistente"];
+
+      if (!gruposExcluidos.includes(playerStats.group)) {
+        playerStats.group = nuevoRango;
+      }
+    }
+    function generarLineaDivisoria(emoji, cantidad) {
+      return new Array(cantidad).fill(emoji).join('');
+    }
 
 
-if (commandName === "stats") {
-  const playerName = interaction.options.getString("player");
+    if (commandName === "stats") {
+      const playerName = interaction.options.getString("player");
 
-  await interaction.deferReply();
+      await interaction.deferReply();
 
-  let playerStats;
-  
-  if (playerName == null) {
-      playerStats = room.getPlayerStatsByDiscord(interaction.user.username);
-  } else {
-      playerStats = room.getPlayerStats(playerName);
-  }
+      let playerStats;
 
-  if (playerStats && playerStats.name) {
-      const rango = obtenerRango(playerStats.xp);
-      actualizarGrupoJugador(playerStats, rango);
+      if (playerName == null) {
+        playerStats = room.getPlayerStatsByDiscord(interaction.user.username);
+      } else {
+        playerStats = room.getPlayerStats(playerName);
+      }
 
-      const embed = {
-        color: 0xFFD700,
-        author: {
+      if (playerStats && playerStats.name) {
+        const rango = obtenerRango(playerStats.xp);
+        actualizarGrupoJugador(playerStats, rango);
+
+        const embed = {
+          color: 0xFFD700,
+          author: {
             name: `${playerStats.name}'s Stats`,
             icon_url: 'https://drive.google.com/uc?id=1_G8S8pcSGTSLZxniEsOSWMhQ0rXaDZs0',
-        },
-        fields: [
+          },
+          fields: [
             {
-                name: "🏅 **Rendimiento General**",
-                value: 
-                    `🥅 **Goles:** ${playerStats.goals}\n` +
-                    `❌ **Goles en contra:** ${playerStats.counterGoals}\n` +
-                    `👟 **Asistencias:** ${playerStats.assistances}\n` +
-                    `🧤 **Vallas invictas:** ${Math.round(playerStats.cleanSheets * 10) / 10}\n` + // Redondear a un decimal
-                    `🦵 **Tocadas:** ${playerStats.touches}\n` +
-                    `⏱️ **Tiempo Jugado:** ${formatTime(playerStats.timePlayed)}`,
-                inline: false,
+              name: "🏅 **Rendimiento General**",
+              value:
+                `🥅 **Goles:** ${playerStats.goals}\n` +
+                `❌ **Goles en contra:** ${playerStats.counterGoals}\n` +
+                `👟 **Asistencias:** ${playerStats.assistances}\n` +
+                `🧤 **Vallas invictas:** ${Math.round(playerStats.cleanSheets * 10) / 10}\n` + // Redondear a un decimal
+                `🦵 **Tocadas:** ${playerStats.touches}\n` +
+                `⏱️ **Tiempo Jugado:** ${formatTime(playerStats.timePlayed)}`,
+              inline: false,
             },
             {
               name: " ", // Nombre de campo en blanco para evitar espacio
               value: '<:emoji_24:1285417320122159185>'.repeat(15),
               inline: false,
-          },
+            },
             {
-                name: "🎮 **Partidas y Resultados**",
-                value: 
-                    `🎮 **Partidos Jugados:** ${playerStats.games}\n` +
-                    `✅ **Victorias:** ${playerStats.victories}\n` +
-                    `❎ **Derrotas:** ${playerStats.defeated}`,
-                inline: false,
+              name: "🎮 **Partidas y Resultados**",
+              value:
+                `🎮 **Partidos Jugados:** ${playerStats.games}\n` +
+                `✅ **Victorias:** ${playerStats.victories}\n` +
+                `❎ **Derrotas:** ${playerStats.defeated}`,
+              inline: false,
             },
             {
               name: " ", // Nombre de campo en blanco para evitar espacio
               value: '<:emoji_24:1285417320122159185>'.repeat(15),
               inline: false,
-          },
-            {
-                name: "🏆 **Información del Jugador**",
-                value: 
-                    `📃 **Grupo:** ${playerStats.group}\n` +
-                    `💬 **Discord:** ${playerStats.discordUser}\n` +
-                    `✨ **XP:** ${playerStats.xp}\n` +
-                    `🦈 **Rango:** ${rango}\n` +
-                    `🚫 **Sanción:** ${playerStats.sancion || "Ninguna"}`,
-                inline: false,
             },
-        ],
-        thumbnail: {
+            {
+              name: "🏆 **Información del Jugador**",
+              value:
+                `📃 **Grupo:** ${playerStats.group}\n` +
+                `💬 **Discord:** ${playerStats.discordUser}\n` +
+                `✨ **XP:** ${playerStats.xp}\n` +
+                `🦈 **Rango:** ${rango}\n` +
+                `🚫 **Sanción:** ${playerStats.sancion || "Ninguna"}`,
+              inline: false,
+            },
+          ],
+          thumbnail: {
             url: 'https://drive.google.com/uc?id=1_G8S8pcSGTSLZxniEsOSWMhQ0rXaDZs0',
-        },
-        footer: {
+          },
+          footer: {
             text: "Estadísticas actualizadas",
             icon_url: 'https://drive.google.com/uc?id=1_G8S8pcSGTSLZxniEsOSWMhQ0rXaDZs0',
-        },
-        timestamp: new Date(),
-    };
+          },
+          timestamp: new Date(),
+        };
 
-    await interaction.followUp({ embeds: [embed] });
-  } else {
-      await interaction.followUp("No se encontraron estadísticas para este jugador.");
-  }
-  return;
-}
-
-
-
-
-
-
-
-
+        await interaction.followUp({ embeds: [embed] });
+      } else {
+        await interaction.followUp("No se encontraron estadísticas para este jugador.");
+      }
+      return;
+    }
 
     if (commandName === "group") {
-      // Verificar si interaction.member está definido
+
+      if (!hasPermission(interaction.member)) {
+        return interaction.reply({ content: "¡No tienes permisos para ejecutar este comando!", ephemeral: true });
+      }
       if (!interaction.member) {
         return interaction.reply({ content: "No se pudo obtener información del miembro.", ephemeral: true });
       }
-    
-      // Verificar si el usuario tiene roles asignados
-      if (!interaction.member.roles || interaction.member.roles.cache.size === 0) {
-        return interaction.reply({ content: "¡No tienes roles asignados para ejecutar este comando!", ephemeral: true });
-      }
-    
-      // Obtener los IDs de roles permitidos
-      const programadorRoleId = "1198718698245062777";
-      const jefedestaffRolId = "1133233668199026799";
-      const adminRolId = "1133233628894216302";
-    
-      // Verificar si el usuario tiene alguno de los roles permitidos
-      if (!interaction.member.roles.cache.has(programadorRoleId) &&
-          !interaction.member.roles.cache.has(jefedestaffRolId) &&
-          !interaction.member.roles.cache.has(adminRolId)) {
-        return interaction.reply({ content: "¡No tienes permisos para ejecutar este comando!", ephemeral: true });
-      }
-    
+
+
       // Obtener las opciones del comando
       const playerName = interaction.options.getString("player");
       const playerGroupName = interaction.options.getString("group");
-    
+
       // Validar que el jugador existe
       const player = room.playersdb.find(p => p.name === playerName);
       if (!player) {
         return interaction.reply({ content: `No se encontró al jugador con el nombre ${playerName}.`, ephemeral: true });
       }
-    
+
       // Cambiar el grupo del jugador con manejo de errores
       try {
         room.playerSetGroup(playerName, playerGroupName);
       } catch (error) {
         return interaction.reply({ content: "Ocurrió un error al cambiar el grupo.", ephemeral: true });
       }
-    
+
       // Respuesta con embed
       const embed = {
         color: 0xFFD700,
         title: "Cambio de grupo",
         description: `Se ha cambiado el grupo de ${playerName} a ${playerGroupName}`
       };
-    
+
       interaction.reply({ embeds: [embed] });
     }
-    
-    
+
+
 
 
 

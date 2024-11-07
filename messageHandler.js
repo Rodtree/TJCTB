@@ -7,6 +7,11 @@ const spamCooldownTime = 10000;  // Tiempo de bloqueo (10 segundos)
 const spamLimit = 3;  // Límite de repeticiones antes de aplicar el cooldown
 const exemptMessages = ["1", "2", "9", "q", "!nv", "!bb", "!size","!afk", "!discord", "!stats", "!power", "!unban", "!unsanc", "!changemap", "!staff", "!adv", "!kick", "!ban", "!gk", "!verify", "!help", "!me"];  // Mensajes exentos de la verificación de spam
 
+const specialGroups = [
+  'Fundador', 'Leviatán', 'Asistente', 'Mod', 'Admin', 
+  'Ayudante', 'Vip', 'Tiburon de oro', 'Jefe de Staff', 'Programador'
+];
+
 function checkForSpam(room, player, message) {
   const playerId = player.id;
 
@@ -35,13 +40,13 @@ function checkForSpam(room, player, message) {
   // Agregamos el mensaje al historial de mensajes recientes del jugador
   playerData.messages.push(message);
 
-  // Solo mantenemos los últimos 3 mensajes en el historial
-  if (playerData.messages.length > 3) {
+  // Solo mantenemos los últimos `spamLimit` mensajes en el historial
+  if (playerData.messages.length > spamLimit) {
       playerData.messages.shift();  // Eliminamos el mensaje más antiguo
   }
 
-  // Verificamos si los últimos 3 mensajes son iguales
-  if (playerData.messages.length === 3 && playerData.messages.every((msg) => msg === message)) {
+  // Verificamos si los últimos `spamLimit` mensajes son iguales
+  if (playerData.messages.length === spamLimit && playerData.messages.every((msg) => msg === message)) {
       playerData.cooldown = now;  // Activamos el cooldown
       playerData.messages = [];  // Reseteamos el historial de mensajes
       room.sendAnnouncement("Estás repitiendo el mismo mensaje. Debes esperar 10 segundos antes de enviar el mismo mensaje nuevamente.", player.id, 0xFF0000, "bold");
@@ -49,6 +54,20 @@ function checkForSpam(room, player, message) {
   }
 
   return false;  // No hay spam, permitimos el mensaje
+}
+
+function formatMessage(room, player, message) {
+  const group = room.playerGetGroup(player.name);
+  const teamEmoji = player.team === 1 ? "🔴" : player.team === 2 ? "🔵" : "⚫";
+
+  // Verifica si el grupo del jugador es especial
+  if (specialGroups.includes(group.group)) {
+    return format(group.format, teamEmoji, player.name, message); // Usa el formato y color del grupo especial
+  }
+
+  // Aplica colores pastel para jugadores en equipo y gris pastel para espectadores
+  const pastelColor = player.team === 1 ? 0xFFB6C1 : player.team === 2 ? 0xADD8E6 : 0xD3D3D3; // Gris pastel para espectadores
+  return { text: `[${teamEmoji}] ${player.name}: ${message}`, color: pastelColor };
 }
 
 function LoadMessageHandler(room) {
@@ -62,11 +81,6 @@ function LoadMessageHandler(room) {
 
     let channel = client.channels.cache.get(room.config.discord_channels.messages);
     channel.send(message);
-  }
-
-  function formatMessage(player, message) {
-    let group = room.playerGetGroup(player.name);
-    return format(group.format, player.team === 0 ? "⚫" : player.team === 1 ? "🔴" : "🔵", player.name, message);
   }
 
   client.on("messageCreate", async (message) => {
@@ -95,8 +109,15 @@ function LoadMessageHandler(room) {
         })
     ) {
         sendMessageDiscord(`**${player.name}**: ${message}`);
-        let group = room.playerGetGroup(player.name);
-        room.sendAnnouncement(formatMessage(player, message), null, group.color);
+        
+        const formattedMessage = formatMessage(room, player, message);
+        
+        if (typeof formattedMessage === "string") {
+          let group = room.playerGetGroup(player.name);
+          room.sendAnnouncement(formattedMessage, null, group.color, "bold");
+        } else {
+          room.sendAnnouncement(formattedMessage.text, null, formattedMessage.color);
+        }
     }
     return false;
   };

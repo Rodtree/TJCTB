@@ -157,7 +157,7 @@
     "group": "Leviatán",
     "color": "0xA7C7E7",
     "format": "[Leviatán] [{0}] {1}: {2}",
-    "commands": ["nv","rangos", "afk", "bb", "discord", "stats", "gk", "verify", "me", "staff", "help"],
+    "commands": ["nv","rangos", "afk", "size", "bb", "discord", "stats", "gk", "verify", "me", "staff", "help"],
     "gameAdmin": false
 },
   {

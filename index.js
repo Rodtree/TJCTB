@@ -3,6 +3,8 @@ const fs = require("fs");
 let serverStatus = { online: false }; // Estado del servidor
 const CONFIG = JSON.parse(fs.readFileSync("./json/config.json", "utf-8"));
 require("dotenv").config();
+const { loadBannedPlayers } = require("./utils");
+
 
 
 
@@ -60,6 +62,7 @@ HaxballJS.then((HBInit) => {
         maxPlayers: CONFIG.max_players,
         public: false,
         noPlayer: true,
+        auth: true,
         token: process.env.HAXBALL_TOKEN,
         geo: CONFIG.geo,
     });
@@ -117,6 +120,7 @@ HaxballJS.then((HBInit) => {
         LoadMatchHandler(room);
         LoadAfkHandler(room);
         getTopPlayers(room);
+        loadBannedPlayers(room);
         
         const sendAnnouncement = () => {
             const announcement = `🦈 Siguenos en TikTok - https://www.tiktok.com/@tjctb 🦈\n

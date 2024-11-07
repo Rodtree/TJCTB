@@ -1,9 +1,11 @@
 const fs = require("fs");
 const { actualizarGrupoJugador, obtenerRango, claimedPositions, gkClaimed } = require('./commandHandler');
 const {handlePlayerLeave} = require('./afkHandler');
-
+const { isPlayerBanned } = require("./utils");
+const { playerAuthMap, recentlyLeftPlayers } = require('./utils'); // Importa desde utils.js
 const Discord = require('./discord/discord');
 let playerTimeTracker = {};
+
 
 function obtenerRangoYActualizarGrupo(playerStats) {
   const xp = playerStats.xp;
@@ -22,7 +24,28 @@ function LoadPlayerHandler(room) {
     room.setPlayerTeam(player.id, reds > blues ? 2 : 1);
   }
 
+
   room.onPlayerJoin = function (player) {
+    console.log(`Jugador ${player.name} Auth ID: ${player.auth}`);
+    if (player.auth) {
+        playerAuthMap.set(player.id, player.auth);
+    } else {
+        console.log("Auth ID no disponible, posiblemente autenticación no habilitada.");
+    }
+
+    // Comprobamos si el jugador está baneado
+    if (isPlayerBanned(player.auth)) {
+        console.log(`El jugador ${player.name} (Auth: ${player.auth}) está en la lista de baneados. Expulsando...`);
+        room.kickPlayer(player.id, "🤣🚫 Estás baneado 🚫🤣", false);
+    } else {
+        console.log(`El jugador ${player.name} ha ingresado.`);
+    }
+
+    // Reinicia el temporizador si el jugador estaba en recentlyLeftPlayers
+    if (recentlyLeftPlayers.has(player.id)) {
+        clearTimeout(recentlyLeftPlayers.get(player.id).timeoutId);
+        recentlyLeftPlayers.delete(player.id); // Limpia de recentlyLeftPlayers ya que está en la sala
+    }
 
     const startTime = Date.now();
     playerTimeTracker[player.name] = startTime;
@@ -94,7 +117,7 @@ if (existingPlayer) {
       player.group = playerData.group;
     }
 
-    const rangosNoExpulsables = ['Fundador','Asistente', 'Mod', 'Admin', 'Ayudante', 'Vip', 'Tiburon de oro', 'Jefe de Staff', 'Programador'];
+    const rangosNoExpulsables = ['Fundador', 'Leviatán','Asistente', 'Mod', 'Admin', 'Ayudante', 'Vip', 'Tiburon de oro', 'Jefe de Staff', 'Programador'];
 
     const mensajesPorRango = {
       'Asistente': `✨ Desde las sombras emerge... 🌙\n🪐 ${player.name}, tan frío y distante como la propia luna.\n✨ Un silencio profundo lo acompaña, reflejando su enigma.\n🌌 Su presencia lo envuelve todo, como un eco en el vacío.`,
@@ -381,6 +404,24 @@ room.playerAddThirdCleanSheet = (name) => {
   };
 
   room.onPlayerLeave = function (player) {
+    if (playerAuthMap.has(player.id)) {
+        const authId = playerAuthMap.get(player.id);
+
+        // Agrega el authId a la lista temporal de recentlyLeftPlayers
+        recentlyLeftPlayers.set(player.id, { auth: authId, name: player.name });
+
+        // Crea un temporizador que eliminará el authId después de 2 minutos
+        const timeoutId = setTimeout(() => {
+            if (recentlyLeftPlayers.has(player.id)) { // Verifica si sigue en recentlyLeftPlayers
+                recentlyLeftPlayers.delete(player.id); // Elimina de recentlyLeftPlayers después de 2 minutos
+                playerAuthMap.delete(player.id); // También elimina del playerAuthMap
+                console.log(`Auth ID de ${player.name} eliminado completamente después de 2 minutos.`);
+            }
+        }, 2 * 60 * 1000); // 2 minutos en milisegundos
+
+        // Guardamos el ID del temporizador para poder cancelarlo más tarde
+        recentlyLeftPlayers.get(player.id).timeoutId = timeoutId;
+    }
     handlePlayerLeave(player);
     const playerGroup = room.playerGetGroup(player.name)?.group;
 

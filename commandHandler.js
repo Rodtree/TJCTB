@@ -1,9 +1,10 @@
 const { isCommand } = require("./utils");
 const { DateTime } = require('luxon');
 const fs = require("fs");
-const { sendBanAnnouncementToDiscord, sendGeneralCommandToDiscord, client, LoadDiscordHandler } = require("./discord/discord");
-const { cargarRangos } = require("./utils");
+const { sendGeneralCommandToDiscord, sendBanAnnouncementToDiscord } = require("./discord/discord");
+const { cargarRangos, playerAuthMap, addBannedPlayer, unbanPlayer, recentlyLeftPlayers } = require("./utils");
 const { getCurrentMapCoordinates, setCurrentMapCoordinates } = require('./sharedConfig');
+let {bannedPlayers} = require('./utils');
 const gkClaimed = { red: null, blue: null };
 const claimedPositions = {};
 const colorRed = 0xFF9688; // Rojo
@@ -461,15 +462,9 @@ function handleUnbanCommand(room, player, args) {
     const match = args.match(/"([^"]+)"/);
 
     if (match) {
-        const playerName = match[1];
-        const playerStats = room.getPlayerStats(playerName);
-
-        if (playerStats && playerStats.sancion && playerStats.sancion.includes("Baneado")) {
-            playerStats.sancion = null;
-            room.sendAnnouncement(`${playerName} fue desbaneado.`, null, 0x00ff00);
-        } else {
-            room.sendAnnouncement("Ese jugador no está baneado.", player.id, 0xff0000);
-        }
+        const targetName = match[1]; // Extraer el nombre del jugador entre comillas
+        unbanPlayer(targetName); // Llamar a la función para desbanear
+        room.sendAnnouncement(`Jugador ${targetName} ha sido desbaneado.`, player.id, 0x00FF00);
     } else {
         room.sendAnnouncement("Formato incorrecto. Por favor, use comillas para encerrar el nombre del jugador.", player.id, 0xff0000);
     }
@@ -532,8 +527,9 @@ function handleKickCommand(room, player, args) {
         if (id < 0) {
             room.sendAnnouncement("Ese jugador no existe", player.id, 0xff0000);
         } else {
+            const kickMessage = `Has sido expulsado por ${player.name}. Razón: ${kickReason}`;
             room.sendAnnouncement(`${room.getPlayer(id).name} ha sido expulsado por ${player.name}. Razón: ${kickReason}`);
-            room.kickPlayer(id);
+            room.kickPlayer(id, kickMessage);
             room.playerAddKick(room.getPlayer(id).name, kickReason, player.name);
         }
     } else {
@@ -546,38 +542,64 @@ function handleBanCommand(room, player, args) {
     const match = args.match(/"([^"]+)"/);
 
     if (match) {
-        const playerName = match[1];
+        const targetName = match[1];
         const banReason = args.substring(match[0].length).trim();
 
-        const playerId = room.getPlayerByName(playerName);
-        if (playerId !== -1) {
-            room.kickPlayer(playerId);
+        const targetPlayer = room.getPlayerList().find(p => p.name === targetName);
+        let authId;
+
+        // Primero, intenta obtener el authId del jugador en la sala
+        if (targetPlayer) {
+            authId = playerAuthMap.get(targetPlayer.id);
         }
 
-        // Obtener la fecha actual usando la función getCurrentDate
-        const currentDate = getCurrentDate();
-
-        // Mensaje de anuncio en el juego con partes en negrita
-        const banAnnouncementForDiscord = `🦈🚫 **${playerName}** ha sido baneado del servidor por **${player.name}**. Razón: **${banReason}**. Fecha de sanción: **${currentDate}** 🚫🦈`;
-
-        // Mensaje de anuncio para Discord sin partes en negrita
-        const banAnnouncementInGame = `🦈🚫 ${playerName} ha sido baneado del servidor por ${player.name}. Razón: ${banReason}. Fecha de sanción: ${currentDate} 🚫🦈`;
-
-        // Enviar anuncio al juego
-        room.sendAnnouncement(banAnnouncementInGame, null, 0xFFD700);
-
-        const playerStats = room.getPlayerStats(playerName);
-        if (playerStats) {
-            // Mostrar claramente el nombre de quien realizó el baneo en la sanción
-            playerStats.sancion = `Baneado por ${player.name} - Razón: ${banReason} - Fecha: ${currentDate}`;
+        // Si no está en la sala, verifica en recentlyLeftPlayers
+        if (!authId) {
+            const recentlyLeftEntry = Array.from(recentlyLeftPlayers.entries()).find(([id, data]) => data.name === targetName);
+            if (recentlyLeftEntry) {
+                authId = recentlyLeftEntry[1].auth; // Recupera el authId
+            }
         }
 
-        // Enviar el mismo mensaje al canal de sanciones en Discord
-        sendBanAnnouncementToDiscord(playerName, banAnnouncementForDiscord);
+        if (authId) {
+            console.log(`Intentando expulsar a ${targetName} con Auth ID: ${authId}`);
+            addBannedPlayer({ name: targetName, auth: authId }, banReason);
+            room.kickPlayer(targetPlayer?.id, "Has sido expulsado de esta sala.");
+
+            // Obtener la fecha actual usando la función getCurrentDate
+            const currentDate = new Date().toLocaleString(); // o puedes usar getCurrentDate si la tienes definida
+
+            // Mensaje de anuncio en el juego
+            const banAnnouncementInGame = `🦈🚫 ${targetName} ha sido baneado del servidor por ${player.name}. Razón: ${banReason}. Fecha de sanción: ${currentDate} 🚫🦈`;
+
+            // Enviar anuncio al juego
+            room.sendAnnouncement(banAnnouncementInGame, null, 0xFFD700);
+
+            // Actualizar estadísticas del jugador baneado
+            const playerStats = room.getPlayerStats(targetName);
+            if (playerStats) {
+                playerStats.sancion = `Baneado por ${player.name} - Razón: ${banReason} - Fecha: ${currentDate}`;
+            }
+
+            // Mensaje de anuncio para Discord
+            const banAnnouncementForDiscord = `🦈🚫 **${targetName}** ha sido baneado del servidor por **${player.name}**. Razón: **${banReason}**. Fecha de sanción: **${currentDate}** 🚫🦈`;
+
+            // Enviar el mismo mensaje al canal de sanciones en Discord
+            sendBanAnnouncementToDiscord(targetName, banAnnouncementForDiscord);
+        } else {
+            room.sendAnnouncement(`Auth ID no disponible para ${targetName}. No se pudo proceder con la expulsión.`, player.id, 0xff0000);
+        }
     } else {
         room.sendAnnouncement("Formato incorrecto. Por favor, use comillas para encerrar el nombre del jugador.", player.id, 0xff0000);
     }
 }
+
+
+
+
+
+
+
 
 
 

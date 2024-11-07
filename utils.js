@@ -1,10 +1,73 @@
-const fs = require("fs");
+const fs = require('fs');
+const path = require('path');
+const bannedPlayersFile = path.join(__dirname, 'json', 'bannedPlayers.json');
+const playerAuthMap = new Map();
+const recentlyLeftPlayers = new Map();
+let bannedPlayers = [];
 
 function calculateDistance(x1, y1, x2, y2) {
   const dx = x2 - x1;
   const dy = y2 - y1;
   return Math.sqrt(dx * dx + dy * dy);
 }
+
+function unbanPlayer(playerName) {
+  loadBannedPlayers(); // Cargar la lista de baneados desde el JSON
+
+  // Filtrar la lista para eliminar el jugador
+  const initialLength = bannedPlayers.length;
+  bannedPlayers = bannedPlayers.filter(banned => banned.name !== playerName);
+
+  // Guardar la lista actualizada
+  saveBannedPlayers();
+
+  if (bannedPlayers.length < initialLength) {
+      console.log(`Jugador ${playerName} ha sido desbaneado.`);
+  } else {
+      console.log(`El jugador ${playerName} no estaba en la lista de baneados.`);
+  }
+}
+
+function loadBannedPlayers() {
+  try {
+    const data = fs.readFileSync(bannedPlayersFile, 'utf8');
+    bannedPlayers = JSON.parse(data);
+    console.log(`Lista de baneados cargada. Jugadores baneados: ${bannedPlayers.length}`);
+  } catch (err) {
+    bannedPlayers = [];
+    console.log("No se encontró un archivo de baneados. Iniciando con lista vacía.");
+  }
+}
+
+function saveBannedPlayers() {
+  fs.writeFileSync(bannedPlayersFile, JSON.stringify(bannedPlayers, null, 2));
+  console.log("Lista de baneados guardada correctamente.");
+}
+
+function addBannedPlayer(player, reason) {
+  if (!player.auth) {
+    console.log(`Error: Intento de banear a ${player.name} sin Auth ID. Ban cancelado.`);
+    return;
+  }
+
+  const playerData = {
+    auth: player.auth,
+    name: player.name,
+    reason,
+    date: new Date().toISOString()
+  };
+
+  bannedPlayers.push(playerData);
+  console.log(`Jugador baneado: ${player.name} (Auth: ${player.auth})`);
+  saveBannedPlayers();
+}
+
+
+
+function isPlayerBanned(auth) {
+  return bannedPlayers.some(banned => banned.auth === auth);
+}
+
 
 function isCommand(message, callback) {
   if (message.startsWith("!")) {
@@ -48,4 +111,4 @@ function cargarRangos() {
   return rangos;
 }
 
-module.exports = { calculateDistance, isCommand, format, secondsToMMSS, shuffleArray, cargarRangos };
+module.exports = { calculateDistance, isCommand, format, secondsToMMSS, unbanPlayer, playerAuthMap, shuffleArray, cargarRangos, isPlayerBanned, addBannedPlayer, loadBannedPlayers, recentlyLeftPlayers, saveBannedPlayers, bannedPlayers };
