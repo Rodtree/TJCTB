@@ -2,7 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const { exec } = require('child_process')
 const { getTopPlayers } = require('../leaderboardHandler.js');
-const { cargarRangos, addBannedPlayer, recentlyLeftPlayers, playerAuthMap, unbanPlayer } = require("../utils.js");
+const { cargarRangos, addBannedPlayer, recentlyLeftPlayers, playerAuthMap, unbanPlayer, predefinedColors } = require("../utils.js");
 const {
   Client,
   GatewayIntentBits,
@@ -25,6 +25,7 @@ const programadorRoleId = "1198718698245062777";
 const jefedestaffRolId = "1133233668199026799";
 const adminRolId = "1133233628894216302";
 const tibustaffRolID = "1270937228859674645";
+
 
 // Función para verificar si el miembro tiene uno de los roles permitidos
 function hasPermission(member) {
@@ -643,6 +644,103 @@ function LoadDiscordHandler(room) {
         });
       }
     }
+
+    if (commandName === "config-vip") {
+      const discordUsername = interaction.user.username;
+      const emoji = interaction.options.getString("emoji");
+      const color = interaction.options.getString("color");
+    
+      // IDs de roles
+      const eternalRoleId = "1235334957262700564";
+      const mensualRoleId = "1209195725787897866";
+    
+      // Comprobar roles del usuario
+      const isEternal = interaction.member.roles.cache.has(eternalRoleId);
+      const isMensual = interaction.member.roles.cache.has(mensualRoleId);
+    
+      // Validar el color seleccionado según los roles del usuario
+      if (
+        (isEternal && !predefinedColors["Vip Eternal"].includes(color)) &&
+        (isMensual && !predefinedColors["Vip Mensual"].includes(color))
+      ) {
+        return interaction.reply({
+          content: "⚠️ **Color no válido**\nSelecciona un color de las opciones disponibles para tu categoría VIP.",
+          ephemeral: true
+        });
+      }
+    
+      // Definir la categoría VIP basada en el color elegido
+      const vipCategory = predefinedColors["Vip Eternal"].includes(color) ? "Vip Eternal" : "Vip Mensual";
+    
+      // Validar que el emoji sea estándar (Unicode) y no personalizado
+      const emojiRegex = /^[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+$/u;
+      if (!emojiRegex.test(emoji)) {
+        return interaction.reply({
+          content: "⚠️ **Emoji no válido**\nSolo se permiten emojis estándar, no personalizados de Discord.",
+          ephemeral: true
+        });
+      }
+    
+      // Convertir el color del formato '#RRGGBB' a un número entero en base 16 (hexadecimal)
+      const colorInt = parseInt(color.replace("#", ""), 16);
+    
+      // Ruta al archivo JSON y datos del usuario
+      const filePath = path.join(__dirname, '../json/config-vips.json');
+      const userData = { username: discordUsername, emoji, color, vipCategory };
+    
+      // Leer, actualizar o agregar datos del usuario, y guardar en JSON
+      fs.readFile(filePath, 'utf8', (err, data) => {
+        if (err && err.code !== 'ENOENT') {
+          console.error("Error al leer el archivo JSON:", err);
+          return interaction.reply({
+            content: "❌ **Error al cargar los datos**\nInténtalo nuevamente más tarde.",
+            ephemeral: true
+          });
+        }
+    
+        const jsonData = data ? JSON.parse(data) : [];
+        const userIndex = jsonData.findIndex(user => user.username === discordUsername);
+    
+        if (userIndex !== -1) {
+          jsonData[userIndex] = userData;
+        } else {
+          jsonData.push(userData);
+        }
+    
+        fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), 'utf8', (writeErr) => {
+          if (writeErr) {
+            console.error("Error al guardar la personalización:", writeErr);
+            return interaction.reply({
+              content: "❌ **Error al guardar los datos**\nInténtalo nuevamente más tarde.",
+              ephemeral: true
+            });
+          }
+    
+          // Crear el embed de respuesta
+          const serverIconUrl = 'https://drive.google.com/uc?export=view&id=1Ajss2YRDxkQ-NbC940eKDbnbu_LRhXN8';
+          const embed = {
+            color: colorInt,
+            author: {
+              name: `Configuración VIP de ${discordUsername}`,
+              icon_url: serverIconUrl, // Icono del servidor
+            },
+            title: "✅ Configuración Guardada",
+            description: `**Emoji:** ${emoji}\n**Color:** ${color}\n**Categoría VIP:** ${vipCategory}`,
+            footer: {
+              text: "Gracias por apoyar a la TibuFamilia<3",
+              icon_url: interaction.client.user.avatarURL(), // Icono del bot
+            },
+            timestamp: new Date(),
+          };
+    
+          interaction.reply({ embeds: [embed] });
+        });
+      });
+    }
+    
+    
+    
+    
 
 
 

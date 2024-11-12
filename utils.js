@@ -11,6 +11,16 @@ function calculateDistance(x1, y1, x2, y2) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+const predefinedColors = {
+  "Vip Eternal": ["#FFE4E1", "#B0C2F2", "#BC98F3", "#B186F1"],
+  "Vip Mensual": ["#B2E2F2", "#A2C8CC", "#C3F9EA", "#6A9EDA"]  
+};
+
+
+const colorChoices = Object.entries(predefinedColors).flatMap(([category, colors]) => 
+  colors.map(color => ({ name: `${category} - ${color}`, value: color }))
+);
+
 function unbanPlayer(playerName) {
   loadBannedPlayers(); // Cargar la lista de baneados desde el JSON
 
@@ -111,4 +121,4 @@ function cargarRangos() {
   return rangos;
 }
 
-module.exports = { calculateDistance, isCommand, format, secondsToMMSS, unbanPlayer, playerAuthMap, shuffleArray, cargarRangos, isPlayerBanned, addBannedPlayer, loadBannedPlayers, recentlyLeftPlayers, saveBannedPlayers, bannedPlayers };
+module.exports = { calculateDistance, colorChoices, predefinedColors, isCommand, format, secondsToMMSS, unbanPlayer, playerAuthMap, shuffleArray, cargarRangos, isPlayerBanned, addBannedPlayer, loadBannedPlayers, recentlyLeftPlayers, saveBannedPlayers, bannedPlayers };

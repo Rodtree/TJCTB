@@ -157,70 +157,70 @@
     "group": "Leviatán",
     "color": "0xA7C7E7",
     "format": "[Leviatán] [{0}] {1}: {2}",
-    "commands": ["nv","rangos", "afk", "size", "bb", "discord", "stats", "gk", "verify", "me", "staff", "help"],
+    "commands": ["nv","rangos", "afk","gsize", "size", "bb", "discord", "stats", "gk", "verify", "me", "staff", "help"],
     "gameAdmin": false
 },
   {
       "group": "Vip",
       "color": "0x00CCBE",
       "format": "[VIP] [{0}] {1}: {2}",
-      "commands": ["nv","rangos", "bb", "afk", "discord", "stats", "gk", "verify", "size",  "me", "staff", "help"],
+      "commands": ["nv","rangos", "bb", "afk", "gsize", "discord", "stats", "gk", "verify", "size",  "me", "staff", "help"],
       "gameAdmin": false
   },
     {
       "group": "Tiburon de oro",
       "color": "0xffCE1A",
       "format": "[Tiburón de oro] [{0}] {1}: {2}",
-      "commands": ["nv","rangos", "bb", "afk", "discord", "stats", "gk", "verify", "size",  "me", "staff", "help"],
+      "commands": ["nv","rangos", "bb", "afk", "gsize", "discord", "stats", "gk", "verify", "size",  "me", "staff", "help"],
       "gameAdmin": false
   },
   {
       "group": "Ayudante",
       "color": "0x98FB98",
       "format": "[Ayudante] [{0}] {1}: {2}",
-      "commands": ["nv","rangos", "bb", "afk", "discord", "stats", "power", "unban", "unsanc", "size",  "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
+      "commands": ["nv","rangos", "bb", "afk", "gsize", "discord", "stats", "power", "unban", "unsanc", "size",  "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
       "gameAdmin": true
   },
   {
       "group": "Mod",
       "color": "0xFF6961",
       "format": "[Mod] [{0}] {1}: {2}",
-      "commands": ["nv","rangos", "bb", "afk", "discord", "stats", "power", "size",  "unban", "unsanc", "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
+      "commands": ["nv","rangos", "bb", "afk", "gsize", "discord", "stats", "power", "size",  "unban", "unsanc", "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
       "gameAdmin": true
   },
   {
       "group": "Programador",
       "color": "0xDBC4FE",
       "format": "[Programador] [{0}] {1}: {2}",
-      "commands": ["nv","rangos", "bb", "afk", "size", "discord", "stats","unban", "unsanc", "changemap", "staff", "gk", "verify", "help", "me"],
+      "commands": ["nv","rangos", "bb", "afk", "gsize", "size", "discord", "stats","unban", "unsanc", "changemap", "staff", "gk", "verify", "help", "me"],
       "gameAdmin": false
   },
   {
       "group": "Admin",
       "color": "0x87CEEB",
       "format": "[Admin] [{0}] {1}: {2}",
-      "commands": ["nv","rangos", "bb", "afk", "size", "discord", "stats", "power", "unban", "unsanc", "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
+      "commands": ["nv","rangos", "bb", "afk", "gsize", "size", "discord", "stats", "power", "unban", "unsanc", "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
       "gameAdmin": true
   },
   {
       "group": "Jefe de Staff",
       "color": "0xD496E4",
       "format": "[Jefe de staff] [{0}] {1}: {2}",
-      "commands": ["nv","rangos", "bb", "size","afk", "discord", "stats", "power", "unban", "unsanc", "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
+      "commands": ["nv","rangos", "bb", "size","afk", "gsize", "discord", "stats", "power", "unban", "unsanc", "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
       "gameAdmin": true
   },
   {
     "group": "Asistente",
     "color": "0x0979B0",
     "format": "[Asistente] [{0}] {1}: {2}",
-    "commands": ["nv","rangos","power", "bb", "size", "afk", "discord", "stats", "unban", "unsanc", "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
+    "commands": ["nv","rangos","power", "bb", "size", "afk", "gsize", "discord", "stats", "unban", "unsanc", "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
     "gameAdmin": true
    },
   {
       "group": "Fundador",
       "color": "0xF6DB77",
       "format": "[Owner] [{0}] {1}: {2}",
-      "commands": ["nv","rangos","power", "bb", "size", "afk", "discord", "stats", "unban", "unsanc", "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
+      "commands": ["nv","rangos","power", "bb", "size", "afk", "gsize", "discord", "stats", "unban", "unsanc", "changemap", "staff", "adv", "kick", "ban", "gk", "verify", "help", "me"],
       "gameAdmin": true
   }
 ]

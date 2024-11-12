@@ -1,4 +1,5 @@
 const { REST, Routes } = require("discord.js");
+const {colorChoices} = require("./utils");
 require("dotenv").config();
 
 const commands = [
@@ -95,7 +96,25 @@ const commands = [
     description: 'Desvincula tu cuenta de Discord del sistema',
     options: [], // Ya no se necesita la opción 'nombre' porque se usará el usuario que ejecuta el comando
   },
-
+  {
+    name: 'config-vip',
+    description: 'Personaliza tu perfil con un emoji y un color predefinido',
+    options: [
+      {
+        name: 'emoji',
+        type: 3,
+        description: 'Elige un emoji para tu perfil',
+        required: true
+      },
+      {
+        name: 'color',
+        type: 3,
+        description: 'Elige un color entre los predefinidos',
+        choices: colorChoices,
+        required: true
+      }
+    ]
+  },
   {
     name: "cambiar-token",
     description: "Modifica el token de Haxball",

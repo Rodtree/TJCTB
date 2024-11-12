@@ -12,7 +12,6 @@ const colorBlue = 0xC4DAFA; // Azul
 const despedidas = JSON.parse(fs.readFileSync('./json/despedidas.json', 'utf8'));
 const commandCooldowns = {};
 const gks = [];
-
 const mapaContent = {
     x11red: { 1: -1050, 2: 0 },
     x7red: { 1: -1000, 2: 0 },
@@ -25,9 +24,10 @@ let { powerSettings, togglePowerActive } = require('./ballHandler')
 let formacionRed = [];
 let formacionBlue = [];
 let playerSizes = {};
-let afkPlayers = {}; // Objeto para guardar los jugadores AFK y su equipo original.
+let afkPlayers = {}; 
 let afkcooldowns = {};
-let afkTimers = {};  // Objeto para manejar el tiempo que un jugador puede estar AFK.
+let afkTimers = {}; 
+let lastSizeChangeTime = 0;
 
 
 function setPlayerSize(room, playerID, size) {
@@ -165,6 +165,10 @@ function LoadCommandHandler(room, command) {
                 sendGeneralCommandToDiscord("size", player.name);
                 handleSizeCommand(room, player, args);
                 break;
+            case "gsize":
+                sendGeneralCommandToDiscord("size", player.name);
+                handleGlobalSizeCommand(room, player, args);
+                break;
             default:
                 room.sendAnnouncement("Comando no reconocido", player.id, 0xFF0000);
                 break;
@@ -268,7 +272,8 @@ function handleHelpCommand(room, player, args) {
     ];
 
     const vipCommands = [
-        "• !size - Cambiar el tamaño propio (10-20)"
+        "• !size - Cambiar el tamaño propio (10-20)",
+        "• !gsize - Cambiar el tamaño de todos los jugadores (3-40)"
     ];
 
     const staffCommands = [
@@ -376,15 +381,46 @@ function handleStaffCommand(room, player) {
         `${player.name} Has solicitado la ayuda de un administrador. Por favor, aguarde unos instantes.`, player.id, 0xDBC4FE, "bold");
 }
 
-function getCurrentDate(timezone = 'America/Argentina/Buenos_Aires') {
-    return DateTime.now().setZone(timezone).setLocale('es').toLocaleString({
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric'
-    });
+function handleGlobalSizeCommand(room, player, args) {
+    const currentTime = Date.now();
+    const cooldown = 20 * 60 * 1000;  // 20 minutos en milisegundos
+
+    // Verificar si ha pasado el tiempo de cooldown
+    if (currentTime - lastSizeChangeTime < cooldown) {
+        const remainingTime = Math.ceil((cooldown - (currentTime - lastSizeChangeTime)) / 1000 / 60);
+        room.sendAnnouncement(`Este comando está en cooldown. Inténtalo en ${remainingTime} minutos.`, player.id, 0xFF0000);
+        return;
+    }
+
+    const match = args.match(/^"(\d+(\.\d+)?)"$/);
+    if (!match) {
+        room.sendAnnouncement(`Por favor, introduce el tamaño entre comillas, por ejemplo: !globalSize "18".`, player.id, 0xFF0000);
+        return;
+    }
+
+    const newSize = parseFloat(match[1]);
+    if (isNaN(newSize) || newSize < 3 || newSize > 40) {
+        room.sendAnnouncement(`Por favor, introduce un tamaño válido entre 10 y 20.`, player.id, 0xFF0000);
+        return;
+    }
+
+    // Cambiar el tamaño de todos los jugadores
+    for (const player of room.getPlayerList().filter(p => p.id !== 0)) {
+        setPlayerSize(room, player.id, newSize);
+    }
+
+    room.sendAnnouncement(`Todos los jugadores han cambiado al tamaño ${newSize} por 20 segundos.`, null, 0x00FF00);
+    lastSizeChangeTime = currentTime;  // Actualizar el último uso
+
+    // Volver a tamaño normal después de 20 segundos
+    setTimeout(() => {
+        for (const player of room.getPlayerList().filter(p => p.id !== 0)) {
+            setPlayerSize(room, player.id, 15);
+        }
+        room.sendAnnouncement(`Todos los jugadores han vuelto al tamaño normal (15).`, null, 0x00FF00);
+    }, 20000);
 }
+
 
 function handlePowerCommand(room, player) {
     togglePowerActive();
@@ -418,7 +454,7 @@ function handleGKCommand(room, player, args) {
         return;
     }
 
-    const teamName = player.team === 1 ? "red" : "blue";  // Usar minúsculas para las claves
+    const teamName = player.team === 1 ? "red" : "blue";
 
     if (gkClaimed.hasOwnProperty(teamName) && gkClaimed[teamName] !== null) {
         room.sendAnnouncement(`¡Ya hay un GK en el ${teamName} ~ ${gkClaimed[teamName]}!`, player.id, 0xff0000);
@@ -428,8 +464,12 @@ function handleGKCommand(room, player, args) {
             room.sendAnnouncement(`¡${gkClaimed[teamName]} ha dejado de ser GK en el ${teamName}!`);
         }
 
-        gkClaimed[teamName] = player.name;  // Guarda el nombre del jugador como GK
+        gkClaimed[teamName] = player.name;
         claimedPositions[player.name] = true;
+
+        // Cambiar automáticamente el tamaño del jugador a 15 cuando se convierte en GK
+        playerSizes[player.id] = 15;
+        setPlayerSize(room, player.id, 15);
 
         if (teamName === "red") {
             formacionRed += `GK - ${gkClaimed[teamName]}, `;
@@ -456,6 +496,7 @@ function handleGKCommand(room, player, args) {
 
     gks.push(player.id);
 }
+
 
 
 function handleUnbanCommand(room, player, args) {
@@ -595,14 +636,6 @@ function handleBanCommand(room, player, args) {
 }
 
 
-
-
-
-
-
-
-
-
 function handleChangeMapCommand(room, player, args) {
     if (fs.existsSync(`./maps/${args}.hbs`)) {
         room.stopGame();
@@ -640,6 +673,14 @@ function actualizarGrupoJugador(playerStats, nuevoRango) {
 }
 
 function handleSizeCommand(room, player, args) {
+    // Verificar si el jugador es GK
+    const isGK = Object.values(gkClaimed).includes(player.name);
+
+    if (isGK) {
+        room.sendAnnouncement("⚠️ No puedes cambiar tu tamaño mientras seas el GK.", player.id, 0xff0000);
+        return;
+    }
+
     const match = args.match(/^"(\d+)"$/);
 
     if (match) {
