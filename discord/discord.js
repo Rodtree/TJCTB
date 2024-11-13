@@ -13,7 +13,7 @@ const {
   ContextMenuCommandAssertions,
 } = require("discord.js");
 const client = new Client({
-  intents: [
+  intents: [ 
     GatewayIntentBits.Guilds,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessages,
@@ -112,6 +112,7 @@ function sendPlayerJoinMessage(playerName, playerGroup) {
   const CONFIG = require(path.join(__dirname, "..", "json", "config.json"));
   if (welcomeGroups.includes(playerGroup)) {
     const channelID = CONFIG.discord_channels.registro_staff;
+    
 
 
     const embed = {
@@ -413,107 +414,160 @@ function LoadDiscordHandler(room) {
 
   client.on("interactionCreate", async (interaction) => {
     const { commandName, customId, options, user } = interaction;
-
-
+  
+    // Función para actualizar el archivo JSON de jugadores
+    const updatePlayerDatabase = () => {
+      fs.writeFileSync("./json/players.json", JSON.stringify(room.playersdb, null, 2));
+    };
+  
+    // Función para enviar un mensaje de error con emojis y embed estilizado
+    const sendError = async (interaction, message) => {
+      const embed = {
+        color: 0xff3333,
+        title: "⚠️ ❌ **Error**",
+        description: `🚫 | ${message}`,
+        footer: { text: "🔄 Por favor, intenta de nuevo o contacta a un administrador." },
+      };
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    };
+  
+    // Función para enviar un mensaje de éxito con emojis y embed estilizado
+    const sendSuccess = async (interaction, message, isEphemeral = false) => {
+      const embed = {
+        color: 0x33ff99,
+        title: "✅ 🎉 **Éxito**",
+        description: `🎊 | ${message}`,
+        footer: { text: "🦈 ¡Operación completada satisfactoriamente!" },
+      };
+      await interaction.reply({ embeds: [embed], ephemeral: isEphemeral });
+    };
+  
+    // Botón de desvinculación
     if (interaction.isButton()) {
+      const customId = interaction.customId;
+  
+      // Lógica para el botón de desvinculación
       if (customId.startsWith("unlink:")) {
         const [, playerName] = customId.split(":");
-
         const foundPlayer = room.playersdb.find(player => player && player.name === playerName);
-
+  
         if (foundPlayer && foundPlayer.discordUser === user.username) {
           foundPlayer.discordUser = "";
           foundPlayer.auth = "";
-
-          fs.writeFileSync("./json/players.json", JSON.stringify(room.playersdb, null, 2));
-
-          await interaction.reply({
-            content: `✅ **Desvinculación exitosa**\n\nTu cuenta de Discord ha sido **desvinculada** correctamente del jugador **${playerName}**.\n\n🔒 *Si deseas volver a vincular tu cuenta, puedes hacerlo en cualquier momento.*`,
-            ephemeral: true
-          });
+          updatePlayerDatabase();
+  
+          sendSuccess(
+            interaction,
+            `🔓 Tu cuenta de Discord ha sido **desvinculada** correctamente del jugador **${playerName}**.`
+          );
         } else {
+          sendError(
+            interaction,
+            `🔍 No estás vinculado a la cuenta de jugador **${playerName}**. ⚠️ Verifica tu información o contacta a un administrador.`
+          );
+        }
+      }
+  
+      // Lógica para confirmar desvinculación manual
+      if (customId.startsWith("confirm_unlink:")) {
+        const [, discordUsername] = customId.split(":");
+  
+        // Buscar al jugador en la base de datos
+        const foundPlayer = room.playersdb.find(player => player && player.discordUser && player.discordUser.includes(discordUsername));
+  
+        if (foundPlayer) {
+          // Desvincular la cuenta del jugador
+          foundPlayer.discordUser = null;
+          foundPlayer.group = null;
+          updatePlayerDatabase();
+  
+          // Enviar mensaje de éxito
+          const successMessage = `🔓 La cuenta vinculada al usuario de Discord **${discordUsername}** ha sido desvinculada correctamente.`;
+          await sendSuccess(interaction, successMessage);
+  
+          // Eliminar el mensaje original de solicitud de desvinculación después de enviar el mensaje de éxito
+          try {
+            await interaction.message.delete(); // Se usa interaction.message en lugar de buttonInteraction.message
+            console.log("Mensaje de solicitud de desvinculación eliminado exitosamente.");
+          } catch (error) {
+            console.error("Error al eliminar el mensaje de solicitud de desvinculación:", error);
+          }
+        } else {
+          // Si no se encuentra el jugador, enviar mensaje de error
           await interaction.reply({
-            content: `⚠️ **Error**\n\nNo estás vinculado a la cuenta de jugador **${playerName}**. Por favor, revisa tu información o contacta a un administrador si el problema persiste.`,
-            ephemeral: true
+            content: `⚠️ No se pudo encontrar la cuenta vinculada al nombre de usuario **${discordUsername}**.`,
+            ephemeral: true,
           });
         }
       }
-    }
-
-
-
-
-    if (interaction.isButton()) {
+  
+      // Lógica para verificación de jugador
       if (customId.startsWith("verify:")) {
         const [, playerName, playerDiscord] = customId.split(":");
-
-        let player = room.getPlayerObjectByName(playerName);
-
+        const player = room.getPlayerObjectByName(playerName);
+  
         if (player) {
           const embed = {
             color: 0x0E3937,
-            title: "Verificación completada en 🩸🦈Todos Juegan Con Tiburón🦈🩸",
-            description: `¡Felicidades, **${playerDiscord}**! Tu cuenta **${playerName}** ha sido verificada.`,
-            footer: {
-              text: "¡Prepárate para jugar!"
-            }
+            title: "✅ 🩸🦈 **Verificación completada** 🩸🦈",
+            description: `🎉 ¡Felicidades, **${playerDiscord}**! Tu cuenta **${playerName}** ha sido **verificada** con éxito.`,
+            footer: { text: "🎮 ¡Prepárate para jugar!" },
           };
-
-          await user.send({ embeds: [embed], components: [] })
-            .catch(error => {
-              console.error("Error al enviar mensaje de verificación:", error);
+  
+          try {
+            await user.send({ embeds: [embed], components: [] });
+  
+            interaction.message.delete().catch(err => {
+              console.error("❌ Error al eliminar mensaje de verificación:", err);
               interaction.reply({
-                content: "Hubo un error al enviarte el mensaje de verificación.",
-                ephemeral: true
+                content: "⚠️ Hubo un error al eliminar el mensaje de verificación.",
+                ephemeral: true,
               });
             });
-
-          interaction.message.delete()
-            .catch(error => {
-              console.error("Error al eliminar mensaje de verificación:", error);
-              interaction.reply({
-                content: "Hubo un error al eliminar el mensaje de verificación.",
-                ephemeral: true
-              });
-            });
-
-          room.setUserDiscord(playerDiscord, playerName);
-
-          // Después de eliminar el mensaje, enviar el botón de desvinculación
-          setTimeout(() => {
-            const unlink = new ButtonBuilder()
-              .setLabel("Unlink")
-              .setStyle(ButtonStyle.Danger)
-              .setCustomId(`unlink:${playerName}`);
-
-            const row = new ActionRowBuilder().addComponents(unlink);
-
-            const unlinkEmbed = {
-              color: 0xff0000,
-              title: "Desvinculación en 🩸🦈Todos Juegan Con Tiburón🦈🩸",
-              description: `Si deseas desvincularte, presiona el botón que dice "Unlink".`,
-              footer: {
-                text: "¡El funcionamiento del boton es temporal!"
-              }
-            };
-
-            user.send({ embeds: [unlinkEmbed], components: [row] })
-              .catch(error => {
-                console.error("Error al enviar mensaje de desvinculación:", error);
-                interaction.followUp({
-                  content: "Hubo un error al enviarte el mensaje de desvinculación.",
-                  ephemeral: true
+  
+            room.setUserDiscord(playerDiscord, playerName);
+  
+            // Enviar botón de desvinculación después de un pequeño delay
+            setTimeout(() => {
+              const unlinkButton = new ButtonBuilder()
+                .setLabel("🔓 Unlink")
+                .setStyle(ButtonStyle.Danger)
+                .setCustomId(`unlink:${playerName}`);
+  
+              const row = new ActionRowBuilder().addComponents(unlinkButton);
+  
+              const unlinkEmbed = {
+                color: 0xff0000,
+                title: "🔓 🩸🦈 **Desvinculación de cuenta** 🩸🦈",
+                description: `⚠️ Si deseas desvincularte, presiona el botón **"Unlink"**.`,
+                footer: { text: "⏳ ¡El botón estará disponible temporalmente!" },
+              };
+  
+              user.send({ embeds: [unlinkEmbed], components: [row] })
+                .catch(error => {
+                  console.error("❌ Error al enviar mensaje de desvinculación:", error);
+                  interaction.followUp({
+                    content: "⚠️ Hubo un error al enviarte el mensaje de desvinculación.",
+                    ephemeral: true,
+                  });
                 });
-              });
-          }, 1000); // Espera 1 segundo antes de enviar el botón de desvinculación (ajusta según necesites)
+            }, 1000); // Espera 1 segundo antes de enviar el botón de desvinculación
+          } catch (error) {
+            console.error("❌ Error al enviar mensaje de verificación:", error);
+            interaction.reply({
+              content: "⚠️ Hubo un error al enviarte el mensaje de verificación.",
+              ephemeral: true,
+            });
+          }
         } else {
-          interaction.reply({
-            content: "No se pudo encontrar el jugador asociado con esta solicitud de verificación.",
-            ephemeral: true
-          });
+          sendError(interaction, "🔍 No se pudo encontrar el jugador asociado con esta solicitud de verificación.");
         }
       }
     }
+  
+  
+
+
 
     if (commandName === "top") {
       const tipo = options.getString("tipo");
@@ -592,7 +646,63 @@ function LoadDiscordHandler(room) {
     }
 
 
-
+    if (commandName === "desvinculacion-manual") {
+      // Verificar si el usuario tiene permisos para ejecutar el comando
+      if (!hasPermission(interaction.member)) {
+        return interaction.reply({
+          content: "🚫 **Permiso denegado**\n\n❌ ¡No tienes permisos para ejecutar este comando!",
+          ephemeral: true,
+        });
+      }
+    
+      // Obtener el nombre de usuario de Discord del argumento
+      const discordUsername = interaction.options.getString('usuario');
+      const foundPlayer = room.playersdb.find(player => player && player.discordUser && player.discordUser.includes(discordUsername));
+    
+      if (foundPlayer) {
+        // Crear el botón de confirmación de desvinculación
+        const unlinkButton = new ButtonBuilder()
+          .setLabel("❌ Confirmar Desvinculación")
+          .setStyle(ButtonStyle.Danger)
+          .setCustomId(`confirm_unlink:${discordUsername}`);
+    
+        const row = new ActionRowBuilder().addComponents(unlinkButton);
+    
+        // Crear el embed con la información del jugador y emojis añadidos
+        const unlinkEmbed = {
+          color: 0xff0000,
+          title: "🦈 **Solicitud de Desvinculación** 🦈",
+          description:
+            `🔍 **Jugador**: **${discordUsername}**\n` +
+            `\n🔓 **Grupo**: ${foundPlayer.group || "Sin grupo"}\n` +
+            `\n🌟 **Estadísticas Actuales**:\n` +
+            `🏆 **Victorias**: ${foundPlayer.victories || 0}\n` +
+            `😔 **Derrotas**: ${foundPlayer.defeated || 0}\n` +
+            `⚽ **Goles**: ${foundPlayer.goals || 0}\n` +
+            `\n❗ **Nota**: Si deseas **desvincular** esta cuenta de Discord, presiona el botón **"Confirmar Desvinculación"** aquí abajo.`,
+          footer: {
+            text: "⚠️ Este botón es temporal. Contacta con un administrador si tienes problemas.",
+          },
+        };
+    
+        // Enviar el embed con el botón de confirmación al canal de administración
+        await interaction.reply({
+          content: `📩 **Solicitud de Desvinculación Enviada**\n\n🔄 Se ha generado una solicitud de desvinculación para el jugador **${discordUsername}**. Espera la confirmación.`,
+          embeds: [unlinkEmbed],
+          components: [row],
+          ephemeral: false,
+        });
+      } else {
+        // Mensaje de error si no se encuentra el jugador
+        await interaction.reply({
+          content: `⚠️ **Jugador No Encontrado**\n\n❓ No se encontró ninguna cuenta de jugador vinculada al nombre de usuario de Discord **${discordUsername}**. Verifica el nombre y vuelve a intentarlo.`,
+          ephemeral: true,
+        });
+      }
+    }
+    
+    
+    
 
 
 
@@ -888,13 +998,10 @@ function LoadDiscordHandler(room) {
     }
 
 
-
-
-
     if (commandName === "link") {
       const CONFIG = require(path.join(__dirname, "..", "json", "config.json"));
       let serverStatus;
-
+    
       try {
         // Asegúrate de que la ruta al archivo sea correcta
         serverStatus = JSON.parse(fs.readFileSync('./json/serverStatus.json', 'utf-8')); // Cambia la ruta según tu estructura de carpetas
@@ -902,13 +1009,26 @@ function LoadDiscordHandler(room) {
         console.error("Error leyendo el estado del servidor:", error);
         serverStatus = { online: false }; // Valor por defecto si hay un error
       }
-
+    
       // Verificamos si el servidor está en línea
       let embed;
       if (serverStatus.online) {
         const playersOnline = room.getPlayerList().length; // Devuelve la cantidad de jugadores conectados en tiempo real
         const maxPlayers = CONFIG.max_players; // Obtiene el valor del máximo de jugadores desde la configuración
-
+    
+        // Separamos los jugadores en equipos rojo y azul
+        const redTeam = room.getPlayerList().filter(player => player.team === 1); // Red team
+        const blueTeam = room.getPlayerList().filter(player => player.team === 2); // Blue team
+    
+        // Creamos las listas de jugadores por equipo
+        const redTeamPlayers = redTeam.length > 0
+          ? redTeam.map((player) => `🟥 ${player.name}`).join("\n")
+          : "No hay jugadores en el equipo rojo";
+        const blueTeamPlayers = blueTeam.length > 0
+          ? blueTeam.map((player) => `🟦 ${player.name}`).join("\n")
+          : "No hay jugadores en el equipo azul";
+    
+        // Creamos el embed con fondo negro para la información
         embed = {
           color: 0x00FF00, // Verde si el servidor está en línea
           title: "🟢 Estado Actual del Servidor 🟢",
@@ -918,18 +1038,39 @@ function LoadDiscordHandler(room) {
             `**Jugadores Conectados**: 👥 ${playersOnline}/${maxPlayers}\n` +
             `**Estado**: 🟢 En Línea\n\n` +
             `¡Únete al servidor y juega ahora! 🩸🦈`,
+          fields: [
+            {
+              name: " ",
+              value: '<:emoji_24:1285417320122159185>'.repeat(26), // Línea decorativa con emoji
+              inline: false,
+            },
+            {
+              name: "Equipo Rojo 🔴",
+              value: `\`\`\`yaml\n${redTeamPlayers}\n\`\`\``, // Fondo negro para la lista de jugadores del equipo rojo
+              inline: true, // Esto hará que los equipos estén uno al lado del otro
+            },
+            {
+              name: "Equipo Azul 🔵",
+              value: `\`\`\`yaml\n${blueTeamPlayers}\n\`\`\``, // Fondo negro para la lista de jugadores del equipo azul
+              inline: true, // Esto hará que los equipos estén uno al lado del otro
+            },
+          ],
+          footer: {
+            text: "¡Gracias por jugar! 🥳",
+          },
+          timestamp: new Date(),
         };
-
+    
         // Crear el botón para unirse al servidor si está en línea
         const join = new ButtonBuilder()
           .setLabel("👥 Unirse")
           .setURL(room.config.current_link)
           .setStyle(ButtonStyle.Link);
-
+    
         const row = new ActionRowBuilder().addComponents(join);
-
+    
         interaction.reply({ embeds: [embed], components: [row] });
-
+    
       } else {
         // Si el servidor está offline
         embed = {
@@ -943,10 +1084,14 @@ function LoadDiscordHandler(room) {
             `⚠️ **El servidor está actualmente apagado.**\n` +
             `🔔 **Mantente atento al ping server.**`,
         };
-
+    
         interaction.reply({ embeds: [embed] }); // Sin botón, ya que el servidor está offline
       }
     }
+    
+    
+    
+    
 
 
 

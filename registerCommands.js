@@ -97,6 +97,18 @@ const commands = [
     options: [], // Ya no se necesita la opción 'nombre' porque se usará el usuario que ejecuta el comando
   },
   {
+    name: 'desvinculacion-manual',
+    description: 'En caso de que el /desvincular no funcione',
+    options: [
+      {
+        name: 'usuario',
+        type: 3, // 3 corresponde a 'STRING'
+        description: 'Usuario de Discord a desautenticar',
+        required: true
+      }
+    ]
+  },  
+  {
     name: 'config-vip',
     description: 'Personaliza tu perfil con un emoji y un color predefinido',
     options: [

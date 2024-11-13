@@ -74,30 +74,24 @@ function checkForSpam(room, player, message) {
 
 function formatMessage(room, player, message) {
   const group = room.playerGetGroup(player.name);
-  
+
   // Verificar si `group` y `group.group` existen
   if (group && group.group === "Vip") {
     const playerStats = room.getPlayerStats(player.name);
     
     if (playerStats && playerStats.discordUser) {
-      // Cargar el emoji y color personalizado desde el JSON
       const discordUserInfo = getDiscordUserEmojiAndColor(playerStats.discordUser);
 
       if (discordUserInfo) {
-        // Prefijo de acuerdo con el tipo de VIP
         const vipPrefix = discordUserInfo.vipCategory === "Vip Eternal" ? "[VIP ETERNAL]" : "[VIP]";
-
-        // Formatear el mensaje con el emoji y color personalizado, y en negrita
         return {
           text: `${vipPrefix} [${discordUserInfo.emoji}] ${player.name}: ${message}`,
           color: parseInt(discordUserInfo.color.replace("#", ""), 16),
           style: "bold"
         };
       } else {
-        // Si el VIP no tiene configuración personalizada, asignar un color predeterminado y emoji del equipo
         const teamEmoji = player.team === 1 ? "🔴" : player.team === 2 ? "🔵" : "⚫";
-        const defaultColor = "#00CCBE";  // Color predeterminado para VIP sin configuración personalizada
-        
+        const defaultColor = "#00CCBE";  
         return {
           text: `[VIP] [${teamEmoji}] ${player.name}: ${message}`,
           color: parseInt(defaultColor.replace("#", ""), 16),
@@ -107,20 +101,20 @@ function formatMessage(room, player, message) {
     }
   }
 
-  // Verificar si el grupo del jugador es uno de los grupos especiales
+  // Mensajes en negrita para grupos especiales
   if (group && specialGroups.includes(group.group)) {
     return {
       text: format(group.format, player.team === 1 ? "🔴" : player.team === 2 ? "🔵" : "⚫", player.name, message),
       color: parseInt(group.color, 16),
-      style: "normal"
+      style: "bold"
     };
   }
 
-  // Si no es VIP ni grupo especial, aplicar colores y formato predeterminado para jugadores en equipos
   const teamEmoji = player.team === 1 ? "🔴" : player.team === 2 ? "🔵" : "⚫";
-  const pastelColor = player.team === 1 ? 0xFFB6C1 : player.team === 2 ? 0xADD8E6 : 0xD3D3D3;  // Gris pastel para espectadores
+  const pastelColor = player.team === 1 ? 0xFFB6C1 : player.team === 2 ? 0xADD8E6 : 0xD3D3D3;  
   return { text: `[${teamEmoji}] ${player.name}: ${message}`, color: pastelColor };
 }
+
 
 
 
@@ -139,16 +133,23 @@ function LoadMessageHandler(room) {
   }
 
   client.on("messageCreate", async (message) => {
+    // Ignorar mensajes de bots
     if (message.author.bot) return;
 
+    // Filtrar mensajes solo del canal configurado
     if (message.channel.id !== room.config.discord_channels.messages) return;
 
+    // Prefijo de Discord y formato mejorado
+    const discordPrefix = `💬 Discord: `;
+    const styledMessage = `${discordPrefix}${message.member.displayName}: ${message.content}`;
+    
+    // Enviar anuncio al chat de Haxball
     room.sendAnnouncement(
-      `${message.member.displayName}: ${message.content}`,
+      styledMessage,
       null,
-      room.config.discord_message_color,
-      null,
-      0
+      room.config.discord_message_color || 0x7289DA, // Color azul predeterminado de Discord
+      "bold",
+      2 // Duración prolongada en pantalla para mayor visibilidad
     );
   });
 
